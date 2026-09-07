@@ -4,7 +4,7 @@ Guidance for AI coding agents (and humans) working in this repository.
 
 ## What this repo is
 
-`framework-dashboard` — a Linux desktop GUI companion app for the `framework-tool`
+`fwpanel` — a Linux desktop GUI control panel for the `framework-tool`
 CLI on Framework laptops. Built with **Tauri 2** (Rust backend) + **SvelteKit**
 (TypeScript, Svelte 5) using `@sveltejs/adapter-static` so the frontend compiles
 to static assets embedded in the Tauri webview.
@@ -58,7 +58,7 @@ src/                  SvelteKit frontend (Svelte 5 runes, TypeScript)
   app.html            Shell HTML (Tauri injects into this)
 src-tauri/            Rust backend
   src/lib.rs          All #[tauri::command]s and app wiring (main.rs only calls it)
-  tauri.conf.json     App config: window size, identifier dev.framework.dashboard, build hooks
+  tauri.conf.json     App config: window size, identifier io.github.singh-gur.fwpanel, build hooks
   capabilities/       Tauri permission capabilities — extend when invoking new Tauri APIs
 static/               Static assets copied verbatim
 ```

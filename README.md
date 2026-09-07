@@ -1,9 +1,9 @@
-# framework-dashboard
+# fwpanel
 
-A Linux desktop GUI companion app for [framework-tool](https://github.com/Framework-Laptop/framework-tool),
+A Linux desktop GUI control panel for [framework-tool](https://github.com/Framework-Laptop/framework-tool),
 built for Framework laptops.
 
-The dashboard shells out to `framework-tool` and presents its output as a
+The app shells out to `framework-tool` and presents its output as a
 native desktop UI — battery/charge state, charge limits, input ports, and other
 Framework-specific controls as they gain CLI support.
 

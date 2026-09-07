@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    framework_dashboard_lib::run()
+    fwpanel_lib::run()
 }
