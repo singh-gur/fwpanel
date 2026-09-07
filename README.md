@@ -1,11 +1,12 @@
 # fwpanel
 
-A Linux desktop GUI control panel for [framework-tool](https://github.com/Framework-Laptop/framework-tool),
-built for Framework laptops.
+A Linux desktop control panel for Framework laptops, using the official
+[Framework System](https://github.com/FrameworkComputer/framework-system)
+Rust library (`framework_lib`) through a privileged host service.
 
-The app shells out to `framework-tool` and presents its output as a
-native desktop UI — battery/charge state, charge limits, input ports, and other
-Framework-specific controls as they gain CLI support.
+The approved initial scope is battery/AC status, charge-limit control, USB-C
+power status, and supported input-deck/touchpad status. The first target is
+Framework Laptop 13 AMD Ryzen AI 300 on Fedora 44 x86_64.
 
 Built with:
 
@@ -13,19 +14,29 @@ Built with:
 - [SvelteKit 2](https://kit.svelte.dev) + Svelte 5 + TypeScript — UI
 - pnpm — package manager
 
-> Status: scaffold. The hello-world template; no framework-tool integration yet.
+> Status: scaffold. The hello-world template; the architecture below is approved
+> but not implemented. See the [development plan](plans/initial-development.md).
 
-## Architecture
-
-The GUI is a view layer only. All hardware interaction goes through the
-`framework-tool` CLI, invoked from small Rust command handlers:
+## Approved architecture (not yet implemented)
 
 ```
-Svelte UI → invoke("cmd") → Rust #[tauri::command] → framework-tool subprocess → serde JSON → UI
+Svelte UI → Tauri commands → system D-Bus → fwpanel-service → framework_lib → hardware
 ```
 
-One source of truth for hardware logic, no duplicated EC/ioctl code, and the
-CLI's permission handling is reused as-is.
+The GUI stays unprivileged. A separately installed host service uses
+`framework_lib` (initially pinned to 0.6.5) through the kernel EC driver.
+Hardware logic remains upstream; fwpanel does not duplicate EC/ioctl code.
+This replaces the original CLI-wrapper design: no CLI subprocesses, output
+parsing, or CLI fallback.
+
+The service checks polkit authorization for each operation. Active local users
+can read status without password prompts; charge-limit changes require explicit
+Apply and administrator authentication. Only fixed, named operations are exposed.
+Rust handles service JSON and returns typed data to Svelte.
+
+Distribution will be a native GUI RPM plus a Flatpak GUI, both using the
+separately packaged host-service RPM. Flatpak does not install the privileged
+service. AppImage and Flathub submission are deferred.
 
 ## Prerequisites
 
@@ -40,7 +51,9 @@ sudo dnf install webkit2gtk4.1-devel librsvg2-devel gcc gcc-c++
 
 Other distros: see [Tauri's Linux prerequisites](https://tauri.app/start/prerequisites/).
 
-The `framework-tool` binary must be on `$PATH` (will become a runtime check).
+The `framework_tool` CLI is not required. The planned hardware features will
+require the separately installed `fwpanel-service`; that service does not exist
+in the current scaffold yet.
 
 ## Development
 
@@ -54,7 +67,7 @@ Checks and builds:
 ```bash
 pnpm check          # svelte-check + TypeScript diagnostics
 pnpm build          # frontend only → build/
-pnpm tauri build    # release bundle (AppImage/rpm) → src-tauri/target/release/bundle/
+pnpm tauri build    # current scaffold bundles → src-tauri/target/release/bundle/
 ```
 
 Rust-only checks (from `src-tauri/`):
@@ -73,15 +86,20 @@ src-tauri/     Rust backend (commands, app config, capabilities)
 static/        Static assets
 ```
 
-See [AGENTS.md](AGENTS.md) for detailed conventions and workflow rules.
+These commands and paths describe the current scaffold. The planned Cargo
+workspace, service crates, and packaging recipes will be added during implementation.
+See [AGENTS.md](AGENTS.md) for conventions and the
+[development plan](plans/initial-development.md) for contracts and phase gates.
 
 ## Roadmap
 
-- [ ] Runtime detection of `framework-tool` (version + path check)
-- [ ] Battery/charge state card (read-only, polled)
-- [ ] Charge limit control (requires polkit escalation)
-- [ ] Input port / module info
-- [ ] Packaging: rpm + AppImage
+- [ ] Host service, typed D-Bus contract, and polkit boundary
+- [ ] Live battery/AC status and charge-limit reads through `framework_lib`
+- [ ] Dashboard with polling, retry, and explicit stale/error states
+- [ ] Authenticated charge-limit control with readback verification
+- [ ] USB-C power and supported input-deck/touchpad status
+- [ ] Native GUI RPM and separately installable host-service RPM
+- [ ] Flatpak GUI using the host service
 
 ## License
 
