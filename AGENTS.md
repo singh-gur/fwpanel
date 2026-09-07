@@ -34,9 +34,11 @@ Rules:
 
 ## Commands
 
+`just <task>` wraps the common ones (`just --list` to see all); raw equivalents:
+
 | Task | Command |
 |---|---|
-| Install JS deps | `pnpm install` |
+| Install JS deps | `just install` / `pnpm install` |
 | Type check frontend | `pnpm check` |
 | Build frontend only | `pnpm build` (outputs to `build/`) |
 | Dev (full app, hot reload) | `pnpm tauri dev` |
