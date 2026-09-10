@@ -17,11 +17,14 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use framework_lib::chromium_ec::{CrosEc, CrosEcDriverType, EcResult};
-use framework_lib::power::{BatteryInformation, PowerInfo};
+use framework_lib::chromium_ec::{CrosEc, CrosEcDriverType, EcError, EcResponseStatus, EcResult};
+use framework_lib::power::{
+    BatteryInformation, PowerInfo, UsbChargingType, UsbPdPowerInfo, UsbPowerRoles,
+};
 use framework_lib::smbios::{self, Platform};
 use fwpanel_protocol::{
-    feature, Battery, ChargeLimitReading, ChargeLimits, ErrorCode, PowerSnapshot,
+    feature, Battery, ChargeLimitReading, ChargeLimits, ChargingType, DeckState, ErrorCode,
+    InputDeckSnapshot, Port, PortResult, PortRole, PortsSnapshot, PowerSnapshot,
 };
 /// Maximum duration of a single hardware operation.
 const HARDWARE_DEADLINE: Duration = Duration::from_secs(5);
@@ -116,6 +119,32 @@ impl HardwareAccess {
         })
         .await
         .and_then(|inner| inner)
+    }
+
+    /// Serve `GetPorts` (Phase 5): one serialized read of all four USB-C
+    /// PD port states; per-port failures stay independent.
+    pub async fn ports(&self) -> Result<PortsSnapshot, HardwareError> {
+        let (ec, gate) = self.access()?;
+        let ec = ec.clone();
+        gate.run(move || {
+            // Note: `get_pd_info`/EC response parsing can panic upstream on
+            // malformed data — contained by the process-abort policy.
+            let results = framework_lib::power::get_pd_info(&ec, 4);
+            build_ports_snapshot(results)
+        })
+        .await
+        .and_then(|inner| inner)
+    }
+
+    /// Serve `GetInputDeck` (Phase 5): deck power state and touchpad
+    /// presence only. A specifically unsupported EC command/version is a
+    /// feature boundary, not a hardware failure.
+    pub async fn input_deck(&self) -> Result<InputDeckSnapshot, HardwareError> {
+        let (ec, gate) = self.access()?;
+        let ec = ec.clone();
+        gate.run(move || ec.get_input_deck_status())
+            .await
+            .and_then(build_input_deck_snapshot)
     }
 }
 
@@ -379,7 +408,118 @@ pub fn implemented_features() -> Vec<String> {
         feature::BATTERY.to_string(),
         feature::CHARGE_LIMIT_READ.to_string(),
         feature::CHARGE_LIMIT_WRITE.to_string(),
+        feature::PORTS.to_string(),
+        feature::INPUT_DECK.to_string(),
     ]
+}
+
+/// Convert the four per-port upstream results into the wire snapshot.
+/// A failed port is independently unavailable, never absent.
+fn build_ports_snapshot(
+    results: Vec<EcResult<UsbPdPowerInfo>>,
+) -> Result<PortsSnapshot, HardwareError> {
+    if results.len() != 4 {
+        return Err(HardwareError::new(
+            ErrorCode::InvalidData,
+            format!("expected 4 port results, got {}", results.len()),
+        ));
+    }
+    let ports = std::array::from_fn(|i| match &results[i] {
+        Ok(info) => match map_port(i as u8, info) {
+            Ok(port) => PortResult::Ok { port },
+            Err(_) => PortResult::Unavailable {
+                message: format!("port {i}: implausible readings"),
+            },
+        },
+        Err(e) => PortResult::Unavailable {
+            message: format!("port {i} read failed: {e:?}"),
+        },
+    });
+    Ok(PortsSnapshot {
+        timestamp_ms: now_ms(),
+        ports,
+    })
+}
+
+fn map_role(role: &UsbPowerRoles) -> PortRole {
+    match role {
+        UsbPowerRoles::Disconnected => PortRole::Disconnected,
+        UsbPowerRoles::Source => PortRole::Source,
+        UsbPowerRoles::Sink => PortRole::Sink,
+        UsbPowerRoles::SinkNotCharging => PortRole::SinkNotCharging,
+    }
+}
+
+fn map_charging_type(t: &UsbChargingType) -> ChargingType {
+    match t {
+        UsbChargingType::None => ChargingType::None,
+        UsbChargingType::PD => ChargingType::Pd,
+        UsbChargingType::TypeC => ChargingType::TypeC,
+        UsbChargingType::Proprietary => ChargingType::Proprietary,
+        UsbChargingType::Bc12Dcp => ChargingType::Bc12Dcp,
+        UsbChargingType::Bc12Cdp => ChargingType::Bc12Cdp,
+        UsbChargingType::Bc12Sdp => ChargingType::Bc12Sdp,
+        UsbChargingType::Other => ChargingType::Other,
+        UsbChargingType::VBus => ChargingType::VBus,
+        UsbChargingType::Unknown => ChargingType::Unknown,
+    }
+}
+
+fn map_port(index: u8, info: &UsbPdPowerInfo) -> Result<Port, fwpanel_protocol::ValidationError> {
+    Port {
+        index,
+        role: map_role(&info.role),
+        charging_type: map_charging_type(&info.charging_type),
+        current_voltage_mv: info.meas.voltage_now as u32,
+        max_voltage_mv: info.meas.voltage_max as u32,
+        current_limit_ma: info.meas.current_lim as u32,
+        max_current_ma: info.meas.current_max as u32,
+        dual_role: info.dualrole,
+        max_power_mw: info.max_power,
+    }
+    .validated()
+}
+
+/// Map the deck read; a specifically unsupported command/version is a feature
+/// boundary (`unsupported_feature`), generic I/O failures stay hardware
+/// errors.
+fn build_input_deck_snapshot(
+    status: EcResult<framework_lib::chromium_ec::input_deck::InputDeckStatus>,
+) -> Result<InputDeckSnapshot, HardwareError> {
+    match status {
+        Err(EcError::Response(EcResponseStatus::InvalidCommand))
+        | Err(EcError::Response(EcResponseStatus::InvalidVersion)) => Err(HardwareError::new(
+            ErrorCode::UnsupportedFeature,
+            "the EC does not support input-deck status",
+        )),
+        Err(e) => Err(HardwareError::new(
+            ErrorCode::HardwareUnavailable,
+            format!("input-deck read failed: {e:?}"),
+        )),
+        Ok(status) => Ok(InputDeckSnapshot {
+            timestamp_ms: now_ms(),
+            deck_state: match status.state {
+                framework_lib::chromium_ec::input_deck::InputDeckState::Off => DeckState::Off,
+                framework_lib::chromium_ec::input_deck::InputDeckState::Disconnected => {
+                    DeckState::Disconnected
+                }
+                framework_lib::chromium_ec::input_deck::InputDeckState::TurningOn => {
+                    DeckState::TurningOn
+                }
+                framework_lib::chromium_ec::input_deck::InputDeckState::On => DeckState::On,
+                framework_lib::chromium_ec::input_deck::InputDeckState::ForceOff => {
+                    DeckState::ForceOff
+                }
+                framework_lib::chromium_ec::input_deck::InputDeckState::ForceOn => {
+                    DeckState::ForceOn
+                }
+                framework_lib::chromium_ec::input_deck::InputDeckState::NoDetection => {
+                    DeckState::NoDetection
+                }
+            },
+            touchpad_present: status.touchpad_present,
+        }),
+    }
 }
 
 #[cfg(test)]
@@ -530,12 +670,132 @@ mod tests {
     }
 
     #[test]
-    fn features_advertise_power_reads_and_write() {
+    fn features_advertise_all_implemented() {
         let features = implemented_features();
         assert!(features.contains(&"battery".to_string()));
         assert!(features.contains(&"charge_limit_read".to_string()));
         assert!(features.contains(&"charge_limit_write".to_string()));
-        assert!(!features.contains(&"ports".to_string()));
+        assert!(features.contains(&"ports".to_string()));
+        assert!(features.contains(&"input_deck".to_string()));
+    }
+
+    fn pd_info(
+        role: UsbPowerRoles,
+        voltage_now: u16,
+        current_lim: u16,
+    ) -> EcResult<UsbPdPowerInfo> {
+        Ok(UsbPdPowerInfo {
+            role,
+            charging_type: UsbChargingType::PD,
+            dualrole: true,
+            meas: framework_lib::power::UsbChargeMeasures {
+                voltage_max: 20_000,
+                voltage_now,
+                current_max: 5_000,
+                current_lim,
+            },
+            max_power: 65_000,
+        })
+    }
+
+    #[test]
+    fn ports_snapshot_maps_all_four_with_units() {
+        let results = vec![
+            pd_info(UsbPowerRoles::Sink, 20_000, 3_250),
+            pd_info(UsbPowerRoles::Disconnected, 0, 0),
+            pd_info(UsbPowerRoles::Source, 20_000, 3_000),
+            pd_info(UsbPowerRoles::SinkNotCharging, 5_000, 500),
+        ];
+        let snap = build_ports_snapshot(results).unwrap();
+        let [p0, p1, p2, p3] = &snap.ports;
+        let PortResult::Ok { port } = p0 else {
+            panic!("port 0 should be ok");
+        };
+        assert_eq!(port.index, 0);
+        assert_eq!(port.role, PortRole::Sink);
+        assert_eq!(port.charging_type, ChargingType::Pd);
+        assert_eq!(port.current_voltage_mv, 20_000);
+        assert_eq!(port.max_voltage_mv, 20_000);
+        assert_eq!(port.current_limit_ma, 3_250);
+        assert_eq!(port.max_current_ma, 5_000);
+        assert_eq!(port.max_power_mw, 65_000);
+        assert!(port.dual_role);
+        let PortResult::Ok { port } = p1 else {
+            panic!("port 1 should be ok");
+        };
+        assert_eq!(port.role, PortRole::Disconnected);
+        let PortResult::Ok { port } = p2 else {
+            panic!("port 2 should be ok");
+        };
+        assert_eq!(port.role, PortRole::Source);
+        let PortResult::Ok { port } = p3 else {
+            panic!("port 3 should be ok");
+        };
+        assert_eq!(port.role, PortRole::SinkNotCharging);
+    }
+
+    #[test]
+    fn failed_port_is_unavailable_while_others_stay_ok() {
+        let results: Vec<EcResult<UsbPdPowerInfo>> = vec![
+            pd_info(UsbPowerRoles::Sink, 20_000, 3_250),
+            Err(EcError::DeviceError("port io failed".into())),
+            pd_info(UsbPowerRoles::Source, 20_000, 3_000),
+            pd_info(UsbPowerRoles::Sink, 20_000, 3_250),
+        ];
+        let snap = build_ports_snapshot(results).unwrap();
+        assert!(matches!(snap.ports[0], PortResult::Ok { .. }));
+        match &snap.ports[1] {
+            PortResult::Unavailable { message } => assert!(message.contains("port 1")),
+            other => panic!("port 1 should be unavailable, got {other:?}"),
+        }
+        assert!(matches!(snap.ports[2], PortResult::Ok { .. }));
+        assert!(matches!(snap.ports[3], PortResult::Ok { .. }));
+    }
+
+    #[test]
+    fn wrong_port_count_is_invalid_data() {
+        let results: Vec<EcResult<UsbPdPowerInfo>> = vec![pd_info(UsbPowerRoles::Sink, 0, 0)];
+        let err = build_ports_snapshot(results).unwrap_err();
+        assert_eq!(err.code, ErrorCode::InvalidData);
+    }
+
+    #[test]
+    fn input_deck_maps_state_and_touchpad() {
+        use framework_lib::chromium_ec::input_deck::InputDeckState;
+        let status = framework_lib::chromium_ec::input_deck::InputDeckStatus {
+            state: InputDeckState::On,
+            hubboard_present: true,
+            touchpad_present: true,
+            touchpad_id: 13,
+            top_row: framework_lib::chromium_ec::input_deck::TopRowPositions {
+                pos0: framework_lib::chromium_ec::input_deck::InputModuleType::KeyboardA,
+                pos1: framework_lib::chromium_ec::input_deck::InputModuleType::KeyboardA,
+                pos2: framework_lib::chromium_ec::input_deck::InputModuleType::KeyboardA,
+                pos3: framework_lib::chromium_ec::input_deck::InputModuleType::KeyboardA,
+                pos4: framework_lib::chromium_ec::input_deck::InputModuleType::KeyboardA,
+            },
+        };
+        let snap = build_input_deck_snapshot(Ok(status)).unwrap();
+        assert_eq!(snap.deck_state, DeckState::On);
+        assert!(snap.touchpad_present);
+        // Only deck state and touchpad presence cross the boundary; slot
+        // layout stays behind the service.
+        let json = serde_json::to_string(&snap).unwrap();
+        assert!(!json.contains("pos0"));
+        assert!(!json.contains("hubboard"));
+    }
+
+    #[test]
+    fn unsupported_deck_command_is_a_feature_boundary() {
+        for code in [
+            EcResponseStatus::InvalidCommand,
+            EcResponseStatus::InvalidVersion,
+        ] {
+            let err = build_input_deck_snapshot(Err(EcError::Response(code))).unwrap_err();
+            assert_eq!(err.code, ErrorCode::UnsupportedFeature);
+        }
+        let err = build_input_deck_snapshot(Err(EcError::DeviceError("io".into()))).unwrap_err();
+        assert_eq!(err.code, ErrorCode::HardwareUnavailable);
     }
 
     /// Call-order log for the charge-limit seam tests.

@@ -20,6 +20,60 @@ export interface Battery {
   cycle_count: number;
 }
 
+export type PortRole =
+  | "disconnected"
+  | "source"
+  | "sink"
+  | "sink_not_charging";
+
+export type ChargingType =
+  | "none"
+  | "pd"
+  | "type_c"
+  | "proprietary"
+  | "bc12_dcp"
+  | "bc12_cdp"
+  | "bc12_sdp"
+  | "other"
+  | "vbus"
+  | "unknown";
+
+export interface Port {
+  index: number;
+  role: PortRole;
+  charging_type: ChargingType;
+  current_voltage_mv: number;
+  max_voltage_mv: number;
+  current_limit_ma: number;
+  max_current_ma: number;
+  dual_role: boolean;
+  max_power_mw: number;
+}
+
+export type PortResult =
+  | { status: "ok"; port: Port }
+  | { status: "unavailable"; message: string };
+
+export interface PortsSnapshot {
+  timestamp_ms: number;
+  ports: PortResult[]; // always 4 entries
+}
+
+export type DeckState =
+  | "off"
+  | "disconnected"
+  | "turning_on"
+  | "on"
+  | "force_off"
+  | "force_on"
+  | "no_detection";
+
+export interface InputDeckSnapshot {
+  timestamp_ms: number;
+  deck_state: DeckState;
+  touchpad_present: boolean;
+}
+
 export interface ChargeLimits {
   minimum_percent: number;
   maximum_percent: number;

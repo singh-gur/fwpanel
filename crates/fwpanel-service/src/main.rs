@@ -53,14 +53,26 @@ impl Fwpanel1 {
     }
 
     async fn get_ports(&self, #[zbus(header)] header: Header<'_>) -> zbus::fdo::Result<String> {
-        self.unimplemented(&header).await
+        if let Err(reply) = self.require_read_access(&header).await {
+            return Ok(reply);
+        }
+        match self.hardware.ports().await {
+            Ok(snapshot) => ok_json(&snapshot),
+            Err(e) => Ok(error_json(e.code, &e.message)),
+        }
     }
 
     async fn get_input_deck(
         &self,
         #[zbus(header)] header: Header<'_>,
     ) -> zbus::fdo::Result<String> {
-        self.unimplemented(&header).await
+        if let Err(reply) = self.require_read_access(&header).await {
+            return Ok(reply);
+        }
+        match self.hardware.input_deck().await {
+            Ok(snapshot) => ok_json(&snapshot),
+            Err(e) => Ok(error_json(e.code, &e.message)),
+        }
     }
 
     async fn set_charge_limit(
@@ -176,19 +188,6 @@ impl Fwpanel1 {
             ))
         }
     }
-
-    /// Phase 1 behavior for every hardware-backed method: authorize the read,
-    /// then report the feature as unimplemented before any hardware access or
-    /// write authentication.
-    async fn unimplemented(&self, header: &Header<'_>) -> zbus::fdo::Result<String> {
-        if let Err(reply) = self.require_read_access(header).await {
-            return Ok(reply);
-        }
-        Ok(error_json(
-            ErrorCode::UnsupportedFeature,
-            "this fwpanel-service build does not implement this feature yet",
-        ))
-    }
 }
 
 fn service_info() -> ServiceInfo {
@@ -241,7 +240,7 @@ mod tests {
         assert_eq!(info.protocol_version, PROTOCOL_MAJOR);
         assert_eq!(info.library_version, LIBRARY_VERSION);
         assert_eq!(info.features, hardware::implemented_features());
-        assert!(!info
+        assert!(info
             .features
             .iter()
             .any(|f| f == "ports" || f == "input_deck"));

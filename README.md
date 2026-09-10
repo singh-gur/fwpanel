@@ -14,10 +14,10 @@ Built with:
 - [SvelteKit 2](https://kit.svelte.dev) + Svelte 5 + TypeScript — UI
 - pnpm — package manager
 
-> Status: Phases 1–4 implemented — service/permission boundary, live
-> battery/AC/charge-limit reads, the dashboard, and the authenticated
-> charge-limit control (Phases 1–3 owner-accepted; Phase 4 pending
-> review/acceptance). Ports/deck status and packaging land in later phases.
+> Status: Phases 1–5 implemented — service/permission boundary, live
+> battery/AC/charge-limit reads, the dashboard, the authenticated charge-limit
+> control, and USB-C power + input-deck status (Phases 1–4 owner-accepted;
+> Phase 5 pending review/acceptance). Packaging lands in Phases 6–7.
 
 ## Approved architecture (service boundary implemented)
 
