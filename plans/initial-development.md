@@ -147,7 +147,7 @@ Initially unimplemented methods return `unsupported_feature` without accessing h
 ## Phase 1 — Service and Permission Boundary
 
 - **Objective:** establish a separately privileged, authenticated, inspectable service and typed GUI connection without hardware access.
-- **Status:** In Progress — implementation and unprivileged verification complete; awaiting fresh-context review and owner acceptance.
+- **Status:** Complete (owner-accepted 2026-09-10; merged to main).
 - **Complexity:** High
 - **Estimated Time:** 90–150 minutes
 - **Prerequisites:** approved plan; owner approval before any system installation.
@@ -562,7 +562,8 @@ None blocking the approved plan. System installation, reversible hardware writes
 
 ## Progress
 
-- [ ] Phase 1 — Service and Permission Boundary — implementation complete on `feat/initial-01-service` (6f049b3, fixes 2dab858 + ff469ad); unprivileged verification passed (fmt/check/test/clippy, pnpm check/build, systemd-analyze with recorded limitation, staged smoke run denied bus name as designed) 2026-09-10; review: round 1 FAIL (2 blockers: busctl-inspect policy, start limits) → fixed → round 2 PASS (reviewer zai/glm-5.3/high, runs 0b2cba12 + 034cc461); post-install busctl checks Not Run; executor: root (zai/glm-5.3, session default); research: root-owned doc verification (researcher child lacked web tools — infrastructure limitation, run ebde277e ended without artifacts); run: n/a (root-built)
+- [x] Phase 1 — Service and Permission Boundary — owner-accepted 2026-09-10; implemented on `feat/initial-01-service` (6f049b3, fixes 2dab858 + ff469ad, docs bd03ebc/7f7f7ea/d6f6b98), merged to main; verification: fmt/check/test/clippy + pnpm check/build, 18 tests, systemd-analyze (limitations recorded), staged smoke run, installed-service busctl introspection (5 methods only) + GetServiceInfo protocol-1 no-prompt + unsupported_feature paths no-prompt + polkit defaults verified live; live read-denial Not Run (no inactive/remote session available); review rounds 1–2 (2 blockers fixed, round-2 PASS); executor: root (zai/glm-5.3, session default); research: root-owned (researcher child lacked web tools); run: n/a (root-built)
+- [ ] Phase 2 — Live Battery and Charge-Limit Reads — in progress on `feat/initial-02-power`
 - [ ] Phase 2 — Live Battery and Charge-Limit Reads
 - [ ] Phase 3 — Usable Dashboard
 - [ ] Phase 4 — Authenticated Charge-Limit Control
