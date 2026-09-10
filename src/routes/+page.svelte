@@ -1,7 +1,9 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
   import ChargeLimitControl from "$lib/components/ChargeLimitControl.svelte";
-  import type { PowerSnapshot, ServiceInfo } from "$lib/types";
+  import InputDeckCard from "$lib/components/InputDeckCard.svelte";
+  import PortsCard from "$lib/components/PortsCard.svelte";
+  import type { InputDeckSnapshot, PortsSnapshot, PowerSnapshot, ServiceInfo } from "$lib/types";
 
   // Service connection state. Kinds map to the stable "service-*" prefixes
   // produced by src-tauri/src/service.rs.
@@ -21,6 +23,35 @@
   let lastSuccessAt = $state<Date | null>(null);
   let refreshing = $state(false);
   let announcement = $state("");
+
+  // Per-card snapshots for the secondary read-only cards. A failed card keeps
+  // its previous data (stale) or an unavailable message; one failed card does
+  // not suppress the others.
+  interface CardSnapshot {
+    data: PortsSnapshot | InputDeckSnapshot | null;
+    error: string | null;
+    lastSuccessAt: Date | null;
+  }
+  function freshCard(): CardSnapshot {
+    return { data: null, error: null, lastSuccessAt: null };
+  }
+  let portsCard = $state<CardSnapshot>(freshCard());
+  let deckCard = $state<CardSnapshot>(freshCard());
+
+  async function readCard<T extends PortsSnapshot | InputDeckSnapshot>(
+    card: CardSnapshot,
+    command: string,
+  ): Promise<void> {
+    try {
+      const data = await guard(invoke<T>(command));
+      card.data = data;
+      card.error = null;
+      card.lastSuccessAt = new Date();
+    } catch (e) {
+      if (disposed) return;
+      card.error = String(e);
+    }
+  }
 
   const REFRESH_INTERVAL_MS = 5000;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -70,6 +101,9 @@
         if (disposed) return;
         powerError = String(e);
       }
+      // One failed card must not suppress the rest.
+      await readCard<PortsSnapshot>(portsCard, "get_ports");
+      await readCard<InputDeckSnapshot>(deckCard, "get_input_deck");
     } finally {
       refreshing = false;
     }
@@ -225,6 +259,10 @@
   {/if}
 
   <ChargeLimitControl {chargeLimit} onApplied={() => void refreshCycle()} />
+
+  <PortsCard card={portsCard} />
+
+  <InputDeckCard card={deckCard} />
 
   <footer>
     <span class="meta">

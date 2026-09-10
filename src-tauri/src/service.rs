@@ -8,7 +8,10 @@
 
 use std::time::Duration;
 
-use fwpanel_protocol::{ChargeLimits, ErrorCode, PowerSnapshot, Reply, ReplyError, ServiceInfo};
+use fwpanel_protocol::{
+    ChargeLimits, ErrorCode, InputDeckSnapshot, PortsSnapshot, PowerSnapshot, Reply, ReplyError,
+    ServiceInfo,
+};
 use zbus::blocking::Connection;
 use zbus::proxy;
 
@@ -50,6 +53,8 @@ const WRITE_TIMEOUT: Duration = Duration::from_secs(150);
 trait Fwpanel1 {
     fn get_service_info(&self) -> zbus::Result<String>;
     fn get_power(&self) -> zbus::Result<String>;
+    fn get_ports(&self) -> zbus::Result<String>;
+    fn get_input_deck(&self) -> zbus::Result<String>;
     fn set_charge_limit(&self, maximum: u32) -> zbus::Result<String>;
 }
 
@@ -63,6 +68,18 @@ pub fn get_service_info() -> Result<ServiceInfo, String> {
 /// Fetch battery/AC status plus the current charge limit.
 pub fn get_power() -> Result<PowerSnapshot, String> {
     let json = call("GetPower", |proxy| proxy.get_power()).map_err(tag_transport)?;
+    Reply::decode(&json).map_err(tag_reply_error)
+}
+
+/// Fetch the four USB-C PD port states.
+pub fn get_ports() -> Result<PortsSnapshot, String> {
+    let json = call("GetPorts", |proxy| proxy.get_ports()).map_err(tag_transport)?;
+    Reply::decode(&json).map_err(tag_reply_error)
+}
+
+/// Fetch input-deck state and touchpad presence.
+pub fn get_input_deck() -> Result<InputDeckSnapshot, String> {
+    let json = call("GetInputDeck", |proxy| proxy.get_input_deck()).map_err(tag_transport)?;
     Reply::decode(&json).map_err(tag_reply_error)
 }
 

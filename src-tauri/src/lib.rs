@@ -1,7 +1,9 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 mod service;
 
-use fwpanel_protocol::{ChargeLimits, PowerSnapshot, ServiceInfo};
+use fwpanel_protocol::{
+    ChargeLimits, InputDeckSnapshot, PortsSnapshot, PowerSnapshot, ServiceInfo,
+};
 
 #[tauri::command]
 async fn get_service_info() -> Result<ServiceInfo, String> {
@@ -19,6 +21,20 @@ async fn get_power() -> Result<PowerSnapshot, String> {
 }
 
 #[tauri::command]
+async fn get_ports() -> Result<PortsSnapshot, String> {
+    tauri::async_runtime::spawn_blocking(service::get_ports)
+        .await
+        .map_err(|e| format!("service call task failed: {e}"))?
+}
+
+#[tauri::command]
+async fn get_input_deck() -> Result<InputDeckSnapshot, String> {
+    tauri::async_runtime::spawn_blocking(service::get_input_deck)
+        .await
+        .map_err(|e| format!("service call task failed: {e}"))?
+}
+
+#[tauri::command]
 async fn set_charge_limit(maximum: u32) -> Result<ChargeLimits, String> {
     tauri::async_runtime::spawn_blocking(move || service::set_charge_limit(maximum))
         .await
@@ -31,6 +47,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_service_info,
             get_power,
+            get_ports,
+            get_input_deck,
             set_charge_limit
         ])
         .run(tauri::generate_context!())

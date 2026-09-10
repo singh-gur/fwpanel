@@ -14,15 +14,15 @@ The frontend is Svelte 5 runes + TypeScript (strict): the dashboard
 (`src/routes/+page.svelte`) polls `get_service_info`/`get_power` sequentially
 (refresh on show, 5s after each finished refresh, paused while hidden,
 manual Retry joins the in-flight refresh) and keeps typed DTO mirrors in
-`src/lib/types.ts`. The charge-limit control
-(`src/lib/components/ChargeLimitControl.svelte`) applies changes only through
+`src/lib/types.ts`. `src/lib/components/ChargeLimitControl.svelte`) applies changes only through
 explicit Apply; the service validates, authorizes via polkit (admin prompt,
 bounded, caller-disappearance-cancelled), writes once under the hardware gate,
 and verifies by readback — no automatic retries. `crates/fwpanel-service`
-serves `GetServiceInfo`, `GetPower`, and `SetChargeLimit` (battery/AC/charge
-limit through `framework_lib =0.6.5`, kernel cros_ec driver only, supported
-only on Framework Laptop 13 AMD Ryzen AI 300); ports/deck return
-`unsupported_feature` until their phases. Follow
+serves `GetServiceInfo`, `GetPower`, `SetChargeLimit`, `GetPorts` (four USB-C
+PD power states, per-port failures independent), and `GetInputDeck` (deck
+power state + touchpad presence; slot inventory not exposed) — all through
+`framework_lib =0.6.5`, kernel cros_ec driver only, supported only on
+Framework Laptop 13 AMD Ryzen AI 300. Follow
 [plans/initial-development.md](plans/initial-development.md) for contracts and
 owner-approved phase gates. First supported target: Framework Laptop 13
 AMD Ryzen AI 300 on Fedora 44 x86_64.
