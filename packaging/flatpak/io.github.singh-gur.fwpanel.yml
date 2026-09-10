@@ -48,7 +48,7 @@ modules:
         # pnpm must not try to reach the network or fetch node headers.
         npm_config_offline: "true"
     build-commands:
-      - tar xzf pnpm.tgz package/bin/pnpm.mjs
+      - tar xzf pnpm.tgz
       - node package/bin/pnpm.mjs install --offline --frozen-lockfile
       - pnpm build
       - cargo build --offline --release --manifest-path src-tauri/Cargo.toml -p fwpanel
