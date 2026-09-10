@@ -24,13 +24,32 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["rpm"],
+    "license": "MIT",
+    "licenseFile": "../LICENSE",
+    "category": "Utility",
+    "shortDescription": "Control panel for Framework laptops",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "linux": {
+      "rpm": {
+        "epoch": 0,
+        "release": "1",
+        "depends": [
+          "fwpanel-service-api = 1",
+          "webkit2gtk4.1",
+          "gtk3"
+        ],
+        "desktopTemplate": "../packaging/fwpanel.desktop.hbs",
+        "files": {
+          "/usr/share/metainfo/io.github.singh-gur.fwpanel.metainfo.xml": "../packaging/io.github.singh-gur.fwpanel.metainfo.xml"
+        }
+      }
+    }
   }
 }
