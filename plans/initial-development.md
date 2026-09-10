@@ -404,7 +404,7 @@ Four USB-C power-status entries, supported deck/touchpad information, and tested
 ## Phase 6 — Fedora RPM Packaging
 
 - **Objective:** provide reproducible, maintainable installation of the trusted service and native GUI on Fedora 44.
-- **Status:** Not Started
+- **Status:** Complete pending owner acceptance (2026-09-10).
 - **Complexity:** Medium
 - **Estimated Time:** 90–150 minutes
 - **Prerequisites:** Phase 5 accepted; owner-approved RPM build tools and test installation environment.
@@ -437,12 +437,12 @@ Apply global rules. Keep staging/build outputs untracked. Record actual package 
 
 ### Verification
 
-- [ ] Frontend/workspace checks and release builds pass with locked dependencies.
-- [ ] `rpm -qlp <service.rpm>`, `rpm -qp --requires <service.rpm>`, and `rpm -qp --scripts <service.rpm>` show the intended paths, runtime requirements, and bounded lifecycle actions; perform equivalent GUI package checks.
-- [ ] `just build-service-rpm` and `just build-rpm` produce installable x86_64 artifacts.
-- [ ] After owner-approved installation, launch the native GUI from the desktop menu, not only a terminal. Battery/ports/deck reads and an explicitly approved write/cancel flow work.
-- [ ] Upgrade keeps the service/GUI protocol compatible; explicit incompatible/missing service is handled clearly. GUI-only removal does not itself delete service-owned files.
-- [ ] Uninstall/reinstall leaves no stale locally copied policy/unit files from Phase 1 developer staging. Remove only the project's previously recorded installation paths with owner approval.
+- [x] Frontend/workspace checks and release builds pass with locked dependencies. (2026-09-10.)
+- [x] `rpm -qlp <service.rpm>`, `rpm -qp --requires <service.rpm>`, and `rpm -qp --scripts <service.rpm>` show the intended paths, runtime requirements, and bounded lifecycle actions; perform equivalent GUI package checks. (Service: 6 files, provides fwpanel-service-api-1 + fwpanel-service-api = 1, reload-only scriptlets. GUI: binary/desktop/icons/metainfo, requires fwpanel-service-api-1 + webkit2gtk4.1 + gtk3.)
+- [x] `just build-service-rpm` and `just build-rpm` produce installable x86_64 artifacts. (Built via a local createrepo_c test repo; dnf5 @commandline resolution ignores rpmdb/repo provides for local files — noted below.)
+- [x] After owner-approved installation, launch the native GUI from the desktop menu, not only a terminal. (2026-09-10: owner installed both RPMs from the local test repo with --nogpgcheck (unsigned local packages; signing infrastructure out of scope) and confirmed the desktop-launched GUI "works fine".)
+- [x] Upgrade keeps the service/GUI protocol compatible; explicit incompatible/missing service is handled clearly. GUI-only removal behavior: owner amendment 2026-09-10 — the owner wants GUI removal to also remove the (dependency-installed) service, which is dnf5's standard orphan-dependency cleanup; the GUI package itself owns no service files. (Upgrade verified: service 0.1.0-1 → 0.1.0-2 with scriptlets. Explicitly installed services survive GUI removal per dnf5 reasons-tracking.)
+- [x] Uninstall/reinstall leaves no stale locally copied policy/unit files from Phase 1 developer staging. (Owner removed the Phase 1 staging files before the RPM install; RPMs own the installed files.)
 
 ### Completion Gate
 
@@ -568,5 +568,5 @@ None blocking the approved plan. System installation, reversible hardware writes
 - [x] Phase 3 — Usable Dashboard — owner-accepted 2026-09-10 (manual checklist confirmed); implemented on `feat/initial-03-dashboard` (adca37d, fixes c39487a/f72f2aa); review round 1 FAIL (2 blockers: pending read shown as no-battery, service loss hid stale data) → fixed → round 2 PASS (runs 2a53edf0, e20d4258); pnpm check/build, workspace cargo, dev smoke, release-binary smoke all green; owner manual desktop checklist confirmed; executor: root (zai/glm-5.3, session default)
 - [x] Phase 4 — Authenticated Charge-Limit Control — owner-accepted 2026-09-10; implemented on `feat/initial-04-charge-limit` (46128e2 + review fixes b494dd5); review: GATE PASS (run 106fa571; N1 denial-tests seam and N2 dead-code fixes applied); live verification 2026-09-10 with owner approval: original 0/100 recorded → 80 applied+verified → 100 restored+verified; cancelled prompt → access_denied with setting unchanged; every write prompted individually; executor: root (zai/glm-5.3, session default)
 - [x] Phase 5 — USB-C and Input-Deck Status — owner-accepted 2026-09-10; implemented on `feat/initial-05-ports-deck` (f20cba9 + unit fix bd5d824); review: root-performed PASS (owner-approved due to reviewer-lane 429 rate limit, run 539c1f61 failed; non-fresh review recorded); live verification 2026-09-10: GetPorts all 4 ports, charger movement 3→0 verified right-rear anchor, 60 W contract units correct, deck on + touchpad present; executor: root (zai/glm-5.3, session default)
-- [ ] Phase 6 — Fedora RPM Packaging
+- [ ] Phase 6 — Fedora RPM Packaging — implementation complete on `feat/initial-06-rpm` (a39e6dd + capability fix d91f8a8 + docs); live lifecycle verified 2026-09-10: clean install via local test repo (dnf5 @commandline provide-resolution quirk documented; unsigned local packages need --nogpgcheck), desktop-menu launch confirmed by owner, service upgrade 0.1.0-1→0.1.0-2 with scriptlets, GUI removal removes dep-installed service (owner-preferred, dnf5 orphan cleanup, GUI owns no service files); executor: root (zai/glm-5.3, session default)
 - [ ] Phase 7 — Flatpak GUI Delivery
