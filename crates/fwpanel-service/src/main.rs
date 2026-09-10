@@ -110,22 +110,15 @@ impl Fwpanel1 {
         // 4. Bounded administrator authorization; any denial, cancellation,
         //    disappearance, timeout, or polkit error stops here.
         let auth = self.polkit.check_write_bounded(&sender).await;
-        if auth != auth::WriteAuthOutcome::Authorized {
-            let message = match auth {
-                auth::WriteAuthOutcome::Disappeared => {
-                    "the requesting client went away during authorization"
-                }
-                auth::WriteAuthOutcome::TimedOut => "authorization timed out",
-                _ => "administrator authorization was denied or unavailable",
-            };
-            return Ok(error_json(ErrorCode::AccessDenied, message));
-        }
         // 5. Recheck presence and read access after the prompt completed.
-        if !self.polkit.caller_present(&sender).await || !self.polkit.check_read(&sender).await {
-            return Ok(error_json(
-                ErrorCode::AccessDenied,
-                "the requesting session is no longer eligible",
-            ));
+        //    `gate_after_auth` is the single decision point: only Ok(())
+        //    proceeds to hardware.
+        if let Err((code, message)) = Self::gate_after_auth(
+            auth,
+            self.polkit.caller_present(&sender).await,
+            self.polkit.check_read(&sender).await,
+        ) {
+            return Ok(error_json(code, message));
         }
         // 6. One authorized hardware change with readback verification.
         match self.hardware.set_charge_limit(maximum).await {
@@ -136,6 +129,33 @@ impl Fwpanel1 {
 }
 
 impl Fwpanel1 {
+    /// The single decision point between authorization and hardware: any
+    /// non-authorized outcome, caller disappearance, or eligibility loss stops
+    /// the write. Extracted so tests can prove denied paths never proceed.
+    fn gate_after_auth(
+        auth: auth::WriteAuthOutcome,
+        caller_present: bool,
+        read_access: bool,
+    ) -> Result<(), (ErrorCode, &'static str)> {
+        if auth != auth::WriteAuthOutcome::Authorized {
+            let message = match auth {
+                auth::WriteAuthOutcome::Disappeared => {
+                    "the requesting client went away during authorization"
+                }
+                auth::WriteAuthOutcome::TimedOut => "authorization timed out",
+                _ => "administrator authorization was denied or unavailable",
+            };
+            return Err((ErrorCode::AccessDenied, message));
+        }
+        if !(caller_present && read_access) {
+            return Err((
+                ErrorCode::AccessDenied,
+                "the requesting session is no longer eligible",
+            ));
+        }
+        Ok(())
+    }
+
     /// Authorize a read with the message's real sender; interaction flags
     /// zero so polling can never prompt. On failure, returns the error reply
     /// JSON to send instead of `()`.
@@ -235,6 +255,39 @@ mod tests {
         assert_eq!(
             auth::ACTION_SET_CHARGE_LIMIT,
             "io.github.singh_gur.fwpanel.set-charge-limit"
+        );
+    }
+
+    #[test]
+    fn denied_cancelled_or_timed_out_auth_never_proceeds_to_hardware() {
+        use auth::WriteAuthOutcome;
+        for outcome in [
+            WriteAuthOutcome::Denied,
+            WriteAuthOutcome::Disappeared,
+            WriteAuthOutcome::TimedOut,
+        ] {
+            // Even with the caller present and eligible, a non-authorized
+            // outcome stops before the hardware step.
+            let decision = Fwpanel1::gate_after_auth(outcome, true, true);
+            assert_eq!(decision.unwrap_err().0, ErrorCode::AccessDenied);
+        }
+    }
+
+    #[test]
+    fn authorized_write_still_requires_present_eligible_caller() {
+        use auth::WriteAuthOutcome;
+        assert!(Fwpanel1::gate_after_auth(WriteAuthOutcome::Authorized, true, true).is_ok());
+        assert_eq!(
+            Fwpanel1::gate_after_auth(WriteAuthOutcome::Authorized, false, true)
+                .unwrap_err()
+                .0,
+            ErrorCode::AccessDenied
+        );
+        assert_eq!(
+            Fwpanel1::gate_after_auth(WriteAuthOutcome::Authorized, true, false)
+                .unwrap_err()
+                .0,
+            ErrorCode::AccessDenied
         );
     }
 

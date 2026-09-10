@@ -68,14 +68,6 @@ impl Polkit {
         self.check(sender, ACTION_READ, 0).await
     }
 
-    /// Check write access; may prompt through polkit's authentication agent.
-    /// (Wired into the Phase 4 write flow.)
-    #[allow(dead_code)]
-    async fn check_write(&self, sender: &str) -> bool {
-        self.check(sender, ACTION_SET_CHARGE_LIMIT, FLAG_ALLOW_USER_INTERACTION)
-            .await
-    }
-
     /// Is the given unique bus name still present on the bus?
     pub async fn caller_present(&self, sender: &str) -> bool {
         let Ok(dbus) = zbus::fdo::DBusProxy::new(&self.connection).await else {
