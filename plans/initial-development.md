@@ -306,7 +306,7 @@ Usable read-only dashboard, removed scaffold assets, minimal application permiss
 ## Phase 4 — Authenticated Charge-Limit Control
 
 - **Objective:** safely apply and verify a maximum charge limit through a narrow authorized operation.
-- **Status:** Complete pending owner acceptance (2026-09-10).
+- **Status:** Complete (owner-accepted 2026-09-10; merged to main).
 - **Complexity:** High
 - **Estimated Time:** 60–120 minutes
 - **Prerequisites:** Phase 3 accepted; separate owner approval for a reversible real hardware write test.
@@ -566,7 +566,7 @@ None blocking the approved plan. System installation, reversible hardware writes
 - [x] Phase 2 — Live Battery and Charge-Limit Reads — owner-accepted 2026-09-10; (23c12b7); review: GATE PASS, no blockers (reviewer zai/glm-5.3/high, run 5e30a80b); live verification 2026-09-10: GetPower on target (on-battery + AC states plausible, percentage internally consistent, limits 0/100, prompts never shown); executor: root (zai/glm-5.3, session default)
 - [ ] Phase 2 — Live Battery and Charge-Limit Reads
 - [x] Phase 3 — Usable Dashboard — owner-accepted 2026-09-10 (manual checklist confirmed); implemented on `feat/initial-03-dashboard` (adca37d, fixes c39487a/f72f2aa); review round 1 FAIL (2 blockers: pending read shown as no-battery, service loss hid stale data) → fixed → round 2 PASS (runs 2a53edf0, e20d4258); pnpm check/build, workspace cargo, dev smoke, release-binary smoke all green; owner manual desktop checklist confirmed; executor: root (zai/glm-5.3, session default)
-- [ ] Phase 4 — Authenticated Charge-Limit Control — implementation complete on `feat/initial-04-charge-limit` (46128e2 + review fixes b494dd5); review: GATE PASS (run 106fa571; N1 denial-tests seam and N2 dead-code fixes applied); live verification 2026-09-10 with owner approval: original 0/100 recorded → 80 applied+verified → 100 restored+verified; cancelled prompt → access_denied with setting unchanged; every write prompted individually; executor: root (zai/glm-5.3, session default)
+- [x] Phase 4 — Authenticated Charge-Limit Control — owner-accepted 2026-09-10; implemented on `feat/initial-04-charge-limit` (46128e2 + review fixes b494dd5); review: GATE PASS (run 106fa571; N1 denial-tests seam and N2 dead-code fixes applied); live verification 2026-09-10 with owner approval: original 0/100 recorded → 80 applied+verified → 100 restored+verified; cancelled prompt → access_denied with setting unchanged; every write prompted individually; executor: root (zai/glm-5.3, session default)
 - [ ] Phase 5 — USB-C and Input-Deck Status
 - [ ] Phase 6 — Fedora RPM Packaging
 - [ ] Phase 7 — Flatpak GUI Delivery
