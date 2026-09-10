@@ -355,7 +355,7 @@ One narrow authenticated control, validation tests, verified readback behavior, 
 ## Phase 5 — USB-C and Input-Deck Status
 
 - **Objective:** complete the approved read-only hardware cards without expanding into unsupported module inventory or controls.
-- **Status:** Complete pending owner acceptance (2026-09-10).
+- **Status:** Complete (owner-accepted 2026-09-10; merged to main).
 - **Complexity:** Medium
 - **Estimated Time:** 60–90 minutes
 - **Prerequisites:** Phase 4 accepted.
@@ -567,6 +567,6 @@ None blocking the approved plan. System installation, reversible hardware writes
 - [ ] Phase 2 — Live Battery and Charge-Limit Reads
 - [x] Phase 3 — Usable Dashboard — owner-accepted 2026-09-10 (manual checklist confirmed); implemented on `feat/initial-03-dashboard` (adca37d, fixes c39487a/f72f2aa); review round 1 FAIL (2 blockers: pending read shown as no-battery, service loss hid stale data) → fixed → round 2 PASS (runs 2a53edf0, e20d4258); pnpm check/build, workspace cargo, dev smoke, release-binary smoke all green; owner manual desktop checklist confirmed; executor: root (zai/glm-5.3, session default)
 - [x] Phase 4 — Authenticated Charge-Limit Control — owner-accepted 2026-09-10; implemented on `feat/initial-04-charge-limit` (46128e2 + review fixes b494dd5); review: GATE PASS (run 106fa571; N1 denial-tests seam and N2 dead-code fixes applied); live verification 2026-09-10 with owner approval: original 0/100 recorded → 80 applied+verified → 100 restored+verified; cancelled prompt → access_denied with setting unchanged; every write prompted individually; executor: root (zai/glm-5.3, session default)
-- [ ] Phase 5 — USB-C and Input-Deck Status — implementation complete on `feat/initial-05-ports-deck` (f20cba9 + unit fix bd5d824); review: root-performed PASS (owner-approved due to reviewer-lane 429 rate limit, run 539c1f61 failed; non-fresh review recorded); live verification 2026-09-10: GetPorts all 4 ports, charger movement 3→0 verified right-rear anchor, 60 W contract units correct, deck on + touchpad present; executor: root (zai/glm-5.3, session default)
+- [x] Phase 5 — USB-C and Input-Deck Status — owner-accepted 2026-09-10; implemented on `feat/initial-05-ports-deck` (f20cba9 + unit fix bd5d824); review: root-performed PASS (owner-approved due to reviewer-lane 429 rate limit, run 539c1f61 failed; non-fresh review recorded); live verification 2026-09-10: GetPorts all 4 ports, charger movement 3→0 verified right-rear anchor, 60 W contract units correct, deck on + touchpad present; executor: root (zai/glm-5.3, session default)
 - [ ] Phase 6 — Fedora RPM Packaging
 - [ ] Phase 7 — Flatpak GUI Delivery
