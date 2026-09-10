@@ -206,7 +206,7 @@ Working service-info round trip, testable authorization/protocol code, staged/in
 ## Phase 2 — Live Battery and Charge-Limit Reads
 
 - **Objective:** prove the library/kernel-driver path on the target laptop and return validated battery/AC data.
-- **Status:** Not Started
+- **Status:** Complete pending owner acceptance (2026-09-10).
 - **Complexity:** High
 - **Estimated Time:** 60–120 minutes
 - **Prerequisites:** Phase 1 accepted; owner-installed service and permission to perform the selected read-only checks.
@@ -230,7 +230,7 @@ Working service-info round trip, testable authorization/protocol code, staged/in
 - [ ] Validate all mapped percentages and units; reject inconsistent/impossible required values instead of clamping them. Keep upstream serial/manufacturer/model data out of replies and application logs. Do not call print-oriented CLI/library wrappers.
 - [ ] Add `get_power() -> Result<PowerSnapshot, String>` to Tauri and register it. Advertise battery and charge-limit-read features only after implementation.
 - [ ] Add small tests for absent battery, valid charging/discharging states, failed optional charge-limit reads, malformed values, timeout, busy, and panic/disconnect recovery using test-only closures/data. Do not require physical hardware for `cargo test`.
-- [ ] Reinstall the staged service only with owner approval; compare status with visible battery behavior while plugging/unplugging AC. If upstream panics or the selected driver cannot read the target, stop and record exact evidence; do not silently patch upstream or change the driver boundary.
+- [x] Reinstall the staged service only with owner approval; compare status with visible battery behavior while plugging/unplugging AC. If upstream panics or the selected driver cannot read the target, stop and record exact evidence; do not silently patch upstream or change the driver boundary. (Owner reinstalled 2026-09-10; no upstream panic; driver read works.)
 
 ### Execution Tracking Rules
 
@@ -238,11 +238,11 @@ Apply global rules. Record real hardware results separately from synthetic tests
 
 ### Verification
 
-- [ ] Run the workspace Rust checks and `pnpm check`/`pnpm build` from Phase 1; all pass.
-- [ ] `busctl --system call io.github.singh_gur.Fwpanel1 /io/github/singh_gur/Fwpanel1 io.github.singh_gur.Fwpanel1 GetPower` returns validated status without authentication prompts for the active local user.
-- [ ] AC transitions and battery percentage are plausible on the target; charge-limit reads agree with their returned contract. No setting is changed.
-- [ ] Missing driver, unsupported platform, read failure, service death, timeout, and busy conditions are explicit in tests/manual evidence; none become valid zero/absent readings.
-- [ ] Failure tests demonstrate a bounded client response and no concurrent second hardware call beside a hung worker.
+- [x] Run the workspace Rust checks and `pnpm check`/`pnpm build` from Phase 1; all pass. (2026-09-10; 29 tests, clippy -D warnings clean.)
+- [x] `busctl --system call io.github.singh_gur.Fwpanel1 /io/github/singh_gur/Fwpanel1 io.github.singh_gur.Fwpanel1 GetPower` returns validated status without authentication prompts for the active local user. (2026-09-10: on-battery reading — ac_present false, 54% discharging, 2577/4763 mAh consistent with percentage, cycle count 16, limits 0/100.)
+- [x] AC transitions and battery percentage are plausible on the target; charge-limit reads agree with their returned contract. No setting is changed. (2026-09-10: after plugging AC — ac_present true, charging true, discharging false, voltage 15393→15951 mV, limits stable; both power states observed; reads only.)
+- [x] Missing driver, unsupported platform, read failure, service death, timeout, and busy conditions are explicit in tests/manual evidence; none become valid zero/absent readings. (Unit tests: unavailable-not-absent-battery, sentinel limits → Failed, invalid percentage → invalid_data, gate busy/timeout/panic; service-death UX is Phase 3.)
+- [x] Failure tests demonstrate a bounded client response and no concurrent second hardware call beside a hung worker. (gate_timeout_leaves_gate_engaged + gate_is_non_queuing; 10s client deadline.)
 
 ### Completion Gate
 
@@ -563,7 +563,7 @@ None blocking the approved plan. System installation, reversible hardware writes
 ## Progress
 
 - [x] Phase 1 — Service and Permission Boundary — owner-accepted 2026-09-10; implemented on `feat/initial-01-service` (6f049b3, fixes 2dab858 + ff469ad, docs bd03ebc/7f7f7ea/d6f6b98), merged to main; verification: fmt/check/test/clippy + pnpm check/build, 18 tests, systemd-analyze (limitations recorded), staged smoke run, installed-service busctl introspection (5 methods only) + GetServiceInfo protocol-1 no-prompt + unsupported_feature paths no-prompt + polkit defaults verified live; live read-denial Not Run (no inactive/remote session available); review rounds 1–2 (2 blockers fixed, round-2 PASS); executor: root (zai/glm-5.3, session default); research: root-owned (researcher child lacked web tools); run: n/a (root-built)
-- [ ] Phase 2 — Live Battery and Charge-Limit Reads — in progress on `feat/initial-02-power`
+- [ ] Phase 2 — Live Battery and Charge-Limit Reads — implementation complete on `feat/initial-02-power` (23c12b7); review: GATE PASS, no blockers (reviewer zai/glm-5.3/high, run 5e30a80b); live verification 2026-09-10: GetPower on target (on-battery + AC states plausible, percentage internally consistent, limits 0/100, prompts never shown); executor: root (zai/glm-5.3, session default)
 - [ ] Phase 2 — Live Battery and Charge-Limit Reads
 - [ ] Phase 3 — Usable Dashboard
 - [ ] Phase 4 — Authenticated Charge-Limit Control
