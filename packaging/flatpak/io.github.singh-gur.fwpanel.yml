@@ -63,41 +63,41 @@ modules:
     sources:
       # Application sources (no node_modules/target — checked out explicitly).
       - type: file
-        path: package.json
+        path: ../../package.json
       - type: file
-        path: pnpm-lock.yaml
+        path: ../../pnpm-lock.yaml
       - type: file
-        path: svelte.config.js
+        path: ../../svelte.config.js
       - type: file
-        path: vite.config.js
+        path: ../../vite.config.js
       - type: file
-        path: tsconfig.json
+        path: ../../tsconfig.json
       - type: file
-        path: LICENSE
+        path: ../../LICENSE
       - type: dir
-        path: src
+        path: ../../src
       - type: dir
-        path: static
+        path: ../../static
       - type: dir
-        path: packaging
+        path: ../../packaging
       - type: file
-        path: src-tauri/Cargo.toml
+        path: ../../src-tauri/Cargo.toml
       - type: file
-        path: src-tauri/build.rs
+        path: ../../src-tauri/build.rs
       - type: file
-        path: src-tauri/tauri.conf.json
+        path: ../../src-tauri/tauri.conf.json
       - type: dir
-        path: src-tauri/src
+        path: ../../src-tauri/src
       - type: dir
-        path: src-tauri/capabilities
+        path: ../../src-tauri/capabilities
       - type: dir
-        path: src-tauri/icons
+        path: ../../src-tauri/icons
       - type: file
-        path: Cargo.toml
+        path: ../../Cargo.toml
       - type: file
-        path: Cargo.lock
+        path: ../../Cargo.lock
       - type: dir
-        path: crates
+        path: ../../crates
       # Pinned offline dependency sources (generated; see generate-sources.sh).
       # node-sources.json also wires the pnpm store and SDK node headers.
       - node-sources.json
