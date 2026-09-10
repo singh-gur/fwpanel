@@ -41,7 +41,7 @@
         "epoch": 0,
         "release": "1",
         "depends": [
-          "fwpanel-service-api = 1",
+          "fwpanel-service-api-1",
           "webkit2gtk4.1",
           "gtk3"
         ],

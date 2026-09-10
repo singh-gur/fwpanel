@@ -15,7 +15,10 @@ ExclusiveArch:  x86_64
 Requires:       polkit
 Requires:       systemd
 Requires:       dbus
-# Protocol compatibility capability consumed by the GUI package.
+# Protocol compatibility capability consumed by the GUI package. The protocol
+# major is embedded in the capability NAME because tauri-bundler's rpm depends
+# are name-only (Dependency::any) and cannot express a versioned require.
+Provides:       fwpanel-service-api-1
 Provides:       fwpanel-service-api = 1
 
 %description
