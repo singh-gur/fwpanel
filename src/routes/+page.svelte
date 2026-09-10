@@ -55,8 +55,9 @@
         const info = await guard(invoke<ServiceInfo>("get_service_info"));
         serviceState = { kind: "ok", info };
       } catch (e) {
+        if (disposed) return;
         serviceState = classify(String(e));
-        powerError = "Service unavailable — status not refreshed.";
+        powerError = "fwpanel service unreachable — data not refreshed.";
         return;
       }
       try {
@@ -65,6 +66,7 @@
         powerError = null;
         lastSuccessAt = new Date();
       } catch (e) {
+        if (disposed) return;
         powerError = String(e);
       }
     } finally {
@@ -136,7 +138,6 @@
   }
 
   const batteryStale = $derived(powerError !== null && power !== null);
-  const batteryUnavailable = $derived(powerError !== null && power === null);
 
   function timeLabel(date: Date | null): string {
     return date ? date.toLocaleTimeString() : "";
@@ -171,18 +172,10 @@
 
   <p class="announcement" role="status" aria-live="polite">{announcement}</p>
 
-  {#if serviceState.kind !== "ok"}
-    <!-- Service-level failure: no hardware readings are shown as data. -->
-  {:else if batteryUnavailable}
-    <section class="card error" aria-labelledby="battery-heading">
+  {#if power === null && powerError === null}
+    <section class="card" aria-labelledby="battery-heading">
       <h2 id="battery-heading">Battery</h2>
-      <p>
-        <strong>Battery status unavailable.</strong>
-        {powerError ?? ""}
-      </p>
-      <p class="hint">
-        {#if lastSuccessAt}Last successful read: {timeLabel(lastSuccessAt)}.{/if}
-      </p>
+      <p>Reading battery status…</p>
     </section>
   {:else if battery}
     <section class="card" aria-labelledby="battery-heading">
@@ -211,33 +204,43 @@
       </dl>
       <p class="hint">Sampled {timeLabel(new Date(power!.timestamp_ms))}</p>
     </section>
-  {:else}
+  {:else if power}
+    <!-- A successful read with battery: null genuinely means no battery. -->
     <section class="card" aria-labelledby="battery-heading">
       <h2 id="battery-heading">Battery</h2>
       <p>No battery detected (running on AC).</p>
     </section>
-  {/if}
-
-  {#if serviceState.kind === "ok"}
-    <section class="card" aria-labelledby="limit-heading">
-      <h2 id="limit-heading">Charge limit</h2>
-      {#if chargeLimit?.status === "ok"}
-        <p class="charge">
-          <span class="percent">{chargeLimit.limits.maximum_percent}%</span>
-          <span class="meta">maximum · minimum {chargeLimit.limits.minimum_percent}%</span>
-        </p>
-        <p class="hint">
-          Read-only in this version; changing it requires the charge-limit control.
-        </p>
-      {:else if chargeLimit?.status === "failed"}
-        <p>
-          <strong>Charge-limit reading unavailable</strong> — {chargeLimit.message}
-        </p>
-      {:else}
-        <p>Waiting for first reading…</p>
-      {/if}
+  {:else}
+    <section class="card error" aria-labelledby="battery-heading">
+      <h2 id="battery-heading">Battery</h2>
+      <p>
+        <strong>Battery status unavailable.</strong>
+        {powerError ?? ""}
+      </p>
+      <p class="hint">
+        {#if lastSuccessAt}Last successful read: {timeLabel(lastSuccessAt)}.{/if}
+      </p>
     </section>
   {/if}
+
+  <section class="card" aria-labelledby="limit-heading">
+    <h2 id="limit-heading">Charge limit</h2>
+    {#if chargeLimit?.status === "ok"}
+      <p class="charge">
+        <span class="percent">{chargeLimit.limits.maximum_percent}%</span>
+        <span class="meta">maximum · minimum {chargeLimit.limits.minimum_percent}%</span>
+      </p>
+      <p class="hint">
+        Read-only in this version; changing it requires the charge-limit control.
+      </p>
+    {:else if chargeLimit?.status === "failed"}
+      <p>
+        <strong>Charge-limit reading unavailable</strong> — {chargeLimit.message}
+      </p>
+    {:else}
+      <p>Waiting for first reading…</p>
+    {/if}
+  </section>
 
   <footer>
     <span class="meta">
