@@ -51,7 +51,9 @@ modules:
       - tar xzf pnpm-exe.tgz
       - ./package/pnpm install --offline --frozen-lockfile --trust-lockfile
       - ./package/pnpm build
-      - cargo build --offline --release --manifest-path src-tauri/Cargo.toml -p fwpanel
+      # Direct Cargo builds must enable Tauri's production asset protocol;
+      # --release alone still loads devUrl instead of the embedded frontend.
+      - cargo build --offline --release --manifest-path src-tauri/Cargo.toml -p fwpanel --features tauri/custom-protocol
       - install -Dm755 target/release/fwpanel /app/bin/fwpanel
       - install -Dm644 packaging/flatpak/io.github.singh_gur.fwpanel.desktop
           /app/share/applications/io.github.singh_gur.fwpanel.desktop
