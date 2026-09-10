@@ -100,6 +100,22 @@ dbus` so the new D-Bus policy is picked up). The service is D-Bus activated —
 do not enable it at boot. `just check-service` runs read-only introspection
 and a `GetServiceInfo` call against an installed service.
 
+Removal is the reverse — stop (if running), delete the same five files,
+`sudo systemctl daemon-reload`, and optionally `sudo systemctl reset-failed`
+if it ever failed during testing. No boot units, config files, or user data
+exist outside those five files, and staging directories are disposable:
+
+```bash
+sudo systemctl stop fwpanel-service.service 2>/dev/null || true
+sudo rm /usr/libexec/fwpanel-service \
+        /usr/lib/systemd/system/fwpanel-service.service \
+        /usr/share/dbus-1/system-services/io.github.singh_gur.Fwpanel1.service \
+        /usr/share/dbus-1/system.d/io.github.singh_gur.Fwpanel1.conf \
+        /usr/share/polkit-1/actions/io.github.singh_gur.fwpanel.policy
+sudo systemctl daemon-reload
+sudo systemctl reset-failed 2>/dev/null || true
+```
+
 ## Project layout
 
 ```
