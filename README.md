@@ -14,10 +14,10 @@ Built with:
 - [SvelteKit 2](https://kit.svelte.dev) + Svelte 5 + TypeScript — UI
 - pnpm — package manager
 
-> Status: Phases 1–3 implemented — service/permission boundary, live
-> battery/AC/charge-limit reads, and the dashboard UI replacing the template
-> (Phases 1–2 owner-accepted; Phase 3 pending review/acceptance). Charge-limit
-> control, ports/deck status, and packaging land in later phases.
+> Status: Phases 1–4 implemented — service/permission boundary, live
+> battery/AC/charge-limit reads, the dashboard, and the authenticated
+> charge-limit control (Phases 1–3 owner-accepted; Phase 4 pending
+> review/acceptance). Ports/deck status and packaging land in later phases.
 
 ## Approved architecture (service boundary implemented)
 
@@ -33,7 +33,9 @@ parsing, or CLI fallback.
 
 The service checks polkit authorization for each operation. Active local users
 can read status without password prompts; charge-limit changes require explicit
-Apply and administrator authentication. Only fixed, named operations are exposed.
+Apply and administrator authentication (bounded to two minutes, cancelled if
+the requesting client disappears, verified by reading the setting back). Only
+fixed, named operations are exposed.
 Rust handles service JSON and returns typed data to Svelte.
 
 Distribution will be a native GUI RPM plus a Flatpak GUI, both using the

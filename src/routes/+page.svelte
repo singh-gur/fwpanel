@@ -1,5 +1,6 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
+  import ChargeLimitControl from "$lib/components/ChargeLimitControl.svelte";
   import type { PowerSnapshot, ServiceInfo } from "$lib/types";
 
   // Service connection state. Kinds map to the stable "service-*" prefixes
@@ -223,24 +224,7 @@
     </section>
   {/if}
 
-  <section class="card" aria-labelledby="limit-heading">
-    <h2 id="limit-heading">Charge limit</h2>
-    {#if chargeLimit?.status === "ok"}
-      <p class="charge">
-        <span class="percent">{chargeLimit.limits.maximum_percent}%</span>
-        <span class="meta">maximum · minimum {chargeLimit.limits.minimum_percent}%</span>
-      </p>
-      <p class="hint">
-        Read-only in this version; changing it requires the charge-limit control.
-      </p>
-    {:else if chargeLimit?.status === "failed"}
-      <p>
-        <strong>Charge-limit reading unavailable</strong> — {chargeLimit.message}
-      </p>
-    {:else}
-      <p>Waiting for first reading…</p>
-    {/if}
-  </section>
+  <ChargeLimitControl {chargeLimit} onApplied={() => void refreshCycle()} />
 
   <footer>
     <span class="meta">

@@ -8,7 +8,7 @@
 
 use std::time::Duration;
 
-use fwpanel_protocol::{ErrorCode, PowerSnapshot, Reply, ReplyError, ServiceInfo};
+use fwpanel_protocol::{ChargeLimits, ErrorCode, PowerSnapshot, Reply, ReplyError, ServiceInfo};
 use zbus::blocking::Connection;
 use zbus::proxy;
 
@@ -39,6 +39,8 @@ fn tag_reply_error(error: ReplyError) -> String {
 /// Client read deadline: generous for the serialized service, short enough
 /// that the UI never hangs on a dead one.
 const METHOD_TIMEOUT: Duration = Duration::from_secs(10);
+/// Write deadline: accommodates the bounded (120s) administrator prompt.
+const WRITE_TIMEOUT: Duration = Duration::from_secs(150);
 
 #[proxy(
     interface = "io.github.singh_gur.Fwpanel1",
@@ -48,6 +50,7 @@ const METHOD_TIMEOUT: Duration = Duration::from_secs(10);
 trait Fwpanel1 {
     fn get_service_info(&self) -> zbus::Result<String>;
     fn get_power(&self) -> zbus::Result<String>;
+    fn set_charge_limit(&self, maximum: u32) -> zbus::Result<String>;
 }
 
 /// Fetch the service description. Errors mention the absent service rather
@@ -60,6 +63,22 @@ pub fn get_service_info() -> Result<ServiceInfo, String> {
 /// Fetch battery/AC status plus the current charge limit.
 pub fn get_power() -> Result<PowerSnapshot, String> {
     let json = call("GetPower", |proxy| proxy.get_power()).map_err(tag_transport)?;
+    Reply::decode(&json).map_err(tag_reply_error)
+}
+
+/// Apply a new charge-limit maximum and return the verified readback.
+/// Authentication may prompt; the deadline covers the bounded prompt flow.
+pub fn set_charge_limit(maximum: u32) -> Result<ChargeLimits, String> {
+    let connection = zbus::blocking::connection::Builder::system()
+        .map_err(|e| tag_transport(format!("cannot reach the system D-Bus bus: {e}")))?
+        .method_timeout(WRITE_TIMEOUT)
+        .build()
+        .map_err(|e| tag_transport(format!("cannot reach the system D-Bus bus: {e}")))?;
+    let proxy = Fwpanel1ProxyBlocking::new(&connection)
+        .map_err(|e| format!("{}: fwpanel service proxy failed: {e}", tag::UNAVAILABLE))?;
+    let json = proxy
+        .set_charge_limit(maximum)
+        .map_err(|e| format!("{}: SetChargeLimit: {e}", tag::UNAVAILABLE))?;
     Reply::decode(&json).map_err(tag_reply_error)
 }
 

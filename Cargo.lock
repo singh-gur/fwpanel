@@ -1399,6 +1399,7 @@ name = "fwpanel-service"
 version = "0.1.0"
 dependencies = [
  "framework_lib",
+ "futures-util",
  "fwpanel-protocol",
  "serde",
  "serde_json",

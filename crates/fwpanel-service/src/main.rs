@@ -11,6 +11,8 @@
 mod auth;
 mod hardware;
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use fwpanel_protocol::{ErrorCode, Reply, ServiceInfo, PROTOCOL_MAJOR};
 use zbus::message::Header;
 
@@ -24,6 +26,8 @@ const LIBRARY_VERSION: &str = "0.6.5";
 struct Fwpanel1 {
     polkit: auth::Polkit,
     hardware: hardware::HardwareAccess,
+    /// Global pending-write guard: at most one authorized change in flight.
+    write_pending: AtomicBool,
 }
 
 #[zbus::interface(name = "io.github.singh_gur.Fwpanel1")]
@@ -62,9 +66,72 @@ impl Fwpanel1 {
     async fn set_charge_limit(
         &self,
         #[zbus(header)] header: Header<'_>,
-        _maximum: u32,
+        maximum: u32,
     ) -> zbus::fdo::Result<String> {
-        self.unimplemented(&header).await
+        // 1. Active-local read access (no prompt).
+        if let Err(reply) = self.require_read_access(&header).await {
+            return Ok(reply);
+        }
+        // 2. Trust-boundary validation of the request itself.
+        let maximum = match fwpanel_protocol::validate_charge_limit_request(maximum) {
+            Ok(maximum) => maximum,
+            Err(_) => {
+                return Ok(error_json(
+                    ErrorCode::InvalidArgument,
+                    "charge-limit maximum must be an integer between 25 and 100",
+                ))
+            }
+        };
+        // 3. One pending write globally; competing writes get busy. The auth
+        //    prompt deliberately does NOT hold the hardware-read gate.
+        if self.write_pending.swap(true, Ordering::SeqCst) {
+            return Ok(error_json(
+                ErrorCode::Busy,
+                "another charge-limit change is already in progress",
+            ));
+        }
+        struct WritePendingGuard<'a>(&'a AtomicBool);
+        impl Drop for WritePendingGuard<'_> {
+            fn drop(&mut self) {
+                self.0.store(false, Ordering::SeqCst);
+            }
+        }
+        let _guard = WritePendingGuard(&self.write_pending);
+
+        let sender = match header.sender() {
+            Some(name) => name.to_string(),
+            None => {
+                return Ok(error_json(
+                    ErrorCode::AccessDenied,
+                    "requests without a sender are not authorized",
+                ))
+            }
+        };
+        // 4. Bounded administrator authorization; any denial, cancellation,
+        //    disappearance, timeout, or polkit error stops here.
+        let auth = self.polkit.check_write_bounded(&sender).await;
+        if auth != auth::WriteAuthOutcome::Authorized {
+            let message = match auth {
+                auth::WriteAuthOutcome::Disappeared => {
+                    "the requesting client went away during authorization"
+                }
+                auth::WriteAuthOutcome::TimedOut => "authorization timed out",
+                _ => "administrator authorization was denied or unavailable",
+            };
+            return Ok(error_json(ErrorCode::AccessDenied, message));
+        }
+        // 5. Recheck presence and read access after the prompt completed.
+        if !self.polkit.caller_present(&sender).await || !self.polkit.check_read(&sender).await {
+            return Ok(error_json(
+                ErrorCode::AccessDenied,
+                "the requesting session is no longer eligible",
+            ));
+        }
+        // 6. One authorized hardware change with readback verification.
+        match self.hardware.set_charge_limit(maximum).await {
+            Ok(limits) => ok_json(&limits),
+            Err(e) => Ok(error_json(e.code, &e.message)),
+        }
     }
 }
 
@@ -129,7 +196,11 @@ fn error_json(code: ErrorCode, message: &str) -> String {
 async fn main() -> zbus::Result<()> {
     let polkit = auth::Polkit::connect().await?;
     let hardware = hardware::HardwareAccess::detect();
-    let service = Fwpanel1 { polkit, hardware };
+    let service = Fwpanel1 {
+        polkit,
+        hardware,
+        write_pending: AtomicBool::new(false),
+    };
     let _connection = zbus::connection::Builder::system()?
         .name(BUS_NAME)?
         .serve_at(OBJECT_PATH, service)?
@@ -145,12 +216,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn service_info_advertises_power_reads_only() {
+    fn service_info_advertises_implemented_features_only() {
         let info = service_info();
         assert_eq!(info.protocol_version, PROTOCOL_MAJOR);
         assert_eq!(info.library_version, LIBRARY_VERSION);
         assert_eq!(info.features, hardware::implemented_features());
-        assert!(!info.features.iter().any(|f| f == "charge_limit_write"));
+        assert!(!info
+            .features
+            .iter()
+            .any(|f| f == "ports" || f == "input_deck"));
     }
 
     #[test]
