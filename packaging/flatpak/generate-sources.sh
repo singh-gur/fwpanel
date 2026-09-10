@@ -22,7 +22,7 @@ git -C "$FBT_DIR" checkout -q "$FBT_REV"
 ROOT="$(cd "$OUT/../.." && pwd)"
 
 echo "== node sources (pnpm) =="
-PYTHONPATH="$FBT_DIR/node" /usr/bin/python3 -m flatpak_node_generator pnpm \
+PYTHONPATH="$FBT_DIR/node" /usr/bin/python3 -m flatpak_node_generator --pnpm-store-version v11 pnpm \
   "$ROOT/pnpm-lock.yaml" -o "$OUT/node-sources.json"
 
 echo "== cargo sources =="
