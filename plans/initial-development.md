@@ -560,7 +560,7 @@ None blocking the approved plan. System installation, reversible hardware writes
 
 ## Progress
 
-- [ ] Phase 1 — Service and Permission Boundary — implementation complete on `feat/initial-01-service`; unprivileged verification passed (fmt/check/test/clippy, pnpm check/build, systemd-analyze with recorded limitation, staged smoke run denied bus name as designed) 2026-09-10; post-install busctl checks Not Run; executor: root (zai/glm-5.3, session default); research: root-owned doc verification (researcher child lacked web tools — infrastructure limitation, run ebde277e ended without artifacts); run: n/a (root-built)
+- [ ] Phase 1 — Service and Permission Boundary — implementation complete on `feat/initial-01-service` (6f049b3, fixes 2dab858 + ff469ad); unprivileged verification passed (fmt/check/test/clippy, pnpm check/build, systemd-analyze with recorded limitation, staged smoke run denied bus name as designed) 2026-09-10; review: round 1 FAIL (2 blockers: busctl-inspect policy, start limits) → fixed → round 2 PASS (reviewer zai/glm-5.3/high, runs 0b2cba12 + 034cc461); post-install busctl checks Not Run; executor: root (zai/glm-5.3, session default); research: root-owned doc verification (researcher child lacked web tools — infrastructure limitation, run ebde277e ended without artifacts); run: n/a (root-built)
 - [ ] Phase 2 — Live Battery and Charge-Limit Reads
 - [ ] Phase 3 — Usable Dashboard
 - [ ] Phase 4 — Authenticated Charge-Limit Control
