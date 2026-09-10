@@ -82,7 +82,7 @@ build-flatpak:
 
 # Read-only Flatpak checks (permissions of the installed app).
 check-flatpak:
-    flatpak info --show-permissions io.github.singh-gur.fwpanel
+    flatpak info --show-permissions io.github.singh_gur.fwpanel
 
 # All static checks: frontend types + Rust format/lint/tests.
 check-all: check fmt-check clippy test
