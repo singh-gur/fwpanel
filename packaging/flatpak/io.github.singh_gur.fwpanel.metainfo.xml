@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.singh_gur.fwpanel</id>
+  <metadata_license>MIT</metadata_license>
+  <project_license>MIT</project_license>
+  <name>fwpanel</name>
+  <summary>Control panel for Framework laptops</summary>
+  <description>
+    <p>
+      fwpanel shows battery and AC status, the current charge limit, USB-C
+      power status, and supported input-deck/touchpad state for Framework
+      laptops. Charge-limit changes require explicit administrator
+      authentication and are verified by reading the setting back.
+    </p>
+  </description>
+  <provides>
+    <dbus service="io.github.singh_gur.Fwpanel1"/>
+  </provides>
+  <launchable type="desktop-id">io.github.singh_gur.fwpanel.desktop</launchable>
+</component>

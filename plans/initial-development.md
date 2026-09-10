@@ -14,8 +14,8 @@ Ship a native GUI RPM and a Flatpak GUI, both using a separately packaged, trust
 - Mode: **Phased**; each phase produces an independently verifiable checkpoint.
 - Plan destination: `plans/initial-development.md`.
 - Approval: owner approved the draft direction in the planning conversation.
-- Implementation status: Phase 1 implemented on `feat/initial-01-service`,
-  pending owner acceptance. Later phases not started.
+- Implementation status: Phases 1–7 owner-accepted. Phase 7 accepted for
+  merge on 2026-09-10 with outstanding live Flatpak/service checks recorded below.
 
 ## Global Context
 
@@ -455,7 +455,7 @@ Native GUI RPM, helper-only RPM, verified lifecycle behavior, and accurate insta
 ## Phase 7 — Flatpak GUI Delivery
 
 - **Objective:** distribute the unprivileged GUI in a sandbox while retaining the approved host-service/polkit boundary.
-- **Status:** Not Started
+- **Status:** Complete (owner-accepted 2026-09-10 for merge; outstanding live checks retained below, not claimed passed).
 - **Complexity:** Medium
 - **Estimated Time:** 90–150 minutes
 - **Prerequisites:** Phase 6 accepted; owner-approved Flatpak builder/runtime tooling; service-only RPM installed for live tests.
@@ -476,13 +476,13 @@ Native GUI RPM, helper-only RPM, verified lifecycle behavior, and accurate insta
 
 - [ ] Select a currently supported GNOME runtime/SDK with Tauri's required WebKitGTK, plus compatible Node 24 and Rust extensions; pin the chosen runtime branch and generator revision. Verify metadata using `flatpak remote-info` and upstream tool documentation. Stop for owner approval if required tooling/dependency compatibility cannot be established.
 - [ ] Generate JS sources using upstream `flatpak-node-generator ... pnpm pnpm-lock.yaml` and Cargo sources using its companion Cargo generator against the workspace lockfile. Inspect the pinned generator's help for exact output/store options and verify pnpm 12 compatibility; do not translate the project to npm/yarn.
-- [ ] Pin/provision the required pnpm executable as a build input. Install dependencies with `pnpm install --offline --frozen-lockfile`; compile Rust using locked offline sources. Dependencies may be downloaded in the source-fetch stage, never through network-enabled build commands.
-- [ ] Build and install the GUI crate only into `/app`; do not build/install the privileged service as a Flatpak component. Keep host policy/systemd assets outside the sandbox package. Reuse desktop metadata/icons from the native package.
-- [ ] Grant `--system-talk-name=io.github.singh_gur.Fwpanel1`, Wayland, fallback X11, and the display-related IPC/DRI permissions actually needed by Tauri/WebKit. No `--socket=system-bus`, `--device=all`, host filesystem access, host command execution, or direct EC access. Omit runtime network permission unless an actual approved local-display requirement demonstrates otherwise; no network feature is in scope.
+- [x] Pin/provision the required pnpm executable as a build input. Install dependencies with `pnpm install --offline --frozen-lockfile`; compile Rust using locked offline sources. Dependencies may be downloaded in the source-fetch stage, never through network-enabled build commands. (pnpm 12.3.4 native executable, v11 store, `--trust-lockfile` for the pinned offline inputs.)
+- [x] Build and install the GUI crate only into `/app`; do not build/install the privileged service as a Flatpak component. Keep host policy/systemd assets outside the sandbox package. Reuse desktop metadata/icons from the native package. (Flatpak desktop/AppStream ID uses `io.github.singh_gur.fwpanel`; direct Cargo build enables `tauri/custom-protocol` to load embedded assets instead of devUrl.)
+- [x] Grant `--system-talk-name=io.github.singh_gur.Fwpanel1`, Wayland, fallback X11, and the display-related IPC/DRI permissions actually needed by Tauri/WebKit. No `--socket=system-bus`, `--device=all`, host filesystem access, host command execution, or direct EC access. Omit runtime network permission unless an actual approved local-display requirement demonstrates otherwise; no network feature is in scope.
 - [ ] Show a clear message when the host service is absent or protocol-incompatible, pointing to the separately installed `fwpanel-service` RPM and documented installation procedure. Do not attempt privileged service installation from the sandbox.
-- [ ] Add `just flatpak-sources`, `just build-flatpak`, and `just check-flatpak`. Build a locally installable bundle/repository from pinned sources and retain exact builder commands in the recipe.
+- [x] Add `just flatpak-sources`, `just build-flatpak`, and `just check-flatpak`. Build a locally installable bundle/repository from pinned sources and retain exact builder commands in the recipe.
 - [ ] Verify that host polkit identifies the real sandbox connection as an active local caller. Test the actual Flatpak Apply/cancel flow; native success does not prove sandbox authorization works. Do not weaken inactive/remote authorization policy to bypass a failed test.
-- [ ] Document RPM + Flatpak installation, host-service upgrades, supported architecture/distro, and the fact that this is a locally distributable Flatpak, not an accepted Flathub publication.
+- [x] Document RPM + Flatpak installation, host-service upgrades, supported architecture/distro, and the fact that this is a locally distributable Flatpak, not an accepted Flathub publication.
 
 ### Execution Tracking Rules
 
@@ -491,15 +491,32 @@ Apply global rules. Track generated source manifests but ignore Flatpak build di
 ### Verification
 
 - [ ] Native frontend/workspace checks still pass; `just flatpak-sources` and `just build-flatpak` succeed with recorded, pinned tooling.
-- [ ] Build from prefetched inputs with no network access during build; it must not reuse an undeclared host `node_modules`, Cargo registry, or credential configuration.
-- [ ] `flatpak info --show-permissions io.github.singh-gur.fwpanel` shows only the narrow approved permissions after local installation.
-- [ ] `flatpak run io.github.singh-gur.fwpanel` opens the GUI and reads live status through the service without repeated authentication prompts.
+- [x] Build from prefetched inputs with no network access during build; it must not reuse an undeclared host `node_modules`, Cargo registry, or credential configuration. (`just build-flatpak` rebuilt and installed successfully on 2026-09-10.)
+- [x] `flatpak info --show-permissions io.github.singh_gur.fwpanel` shows only the narrow approved permissions after local installation.
+- [ ] `flatpak run io.github.singh_gur.fwpanel` opens the GUI and reads live status through the service without repeated authentication prompts. (GUI loads; live reads blocked in the last check by host D-Bus AccessDenied.)
 - [ ] Missing service, incompatible service, service restart, denied write, and cancelled authentication have the same honest behavior as the native GUI.
 - [ ] With separate owner approval, verify a reversible Flatpak charge-limit change/readback/restoration. No sandbox escape, direct hardware permission, or host command helper is added.
 
 ### Completion Gate
 
 Owner confirms the locally installed Flatpak's permission boundary, live behavior, and service-installation guidance. Flathub publication is not a completion condition.
+
+Owner requested Phase 7 completion, commit, merge, and push on 2026-09-10.
+Acceptance records delivery, not a claim that the unchecked live checks passed:
+- `just check-all` passed at closeout (frontend check, Rust fmt/clippy, 44 tests).
+- `just build-flatpak` succeeded with GNOME 49, Rust/Node extensions 25.08,
+  pnpm 12.3.4 and generator revision `1fc32195e3e60fe5c97f0af646dec7a99df5962b`.
+  Generator rerun/reproducibility was not reverified at closeout.
+- Installed Flatpak commit `9d7e7de734d2453a42f947e98024d4bae41c63dd3b92890b28c977394aa545cf`.
+  A 15-second launch check reached frontend-driven `GetServiceInfo` calls with
+  no ProxyResolver/NotAllowed error after enabling `tauri/custom-protocol`.
+- Last host check: service RPM absent, residual running process with unit
+  LoadState=not-found, D-Bus calls denied. Owner was given RPM installation
+  instructions; successful reinstallation/live reads have not been confirmed.
+- Flatpak Apply/cancel, reversible write/readback/restoration, and the full
+  service failure/recovery matrix remain Not Run. Rapid repeated service
+  requests and transport AccessDenied being shown as missing service remain
+  follow-up issues; the sandbox and polkit policies were not weakened.
 
 ### Outputs
 
@@ -569,4 +586,4 @@ None blocking the approved plan. System installation, reversible hardware writes
 - [x] Phase 4 — Authenticated Charge-Limit Control — owner-accepted 2026-09-10; implemented on `feat/initial-04-charge-limit` (46128e2 + review fixes b494dd5); review: GATE PASS (run 106fa571; N1 denial-tests seam and N2 dead-code fixes applied); live verification 2026-09-10 with owner approval: original 0/100 recorded → 80 applied+verified → 100 restored+verified; cancelled prompt → access_denied with setting unchanged; every write prompted individually; executor: root (zai/glm-5.3, session default)
 - [x] Phase 5 — USB-C and Input-Deck Status — owner-accepted 2026-09-10; implemented on `feat/initial-05-ports-deck` (f20cba9 + unit fix bd5d824); review: root-performed PASS (owner-approved due to reviewer-lane 429 rate limit, run 539c1f61 failed; non-fresh review recorded); live verification 2026-09-10: GetPorts all 4 ports, charger movement 3→0 verified right-rear anchor, 60 W contract units correct, deck on + touchpad present; executor: root (zai/glm-5.3, session default)
 - [x] Phase 6 — Fedora RPM Packaging — owner-accepted 2026-09-10; implemented on `feat/initial-06-rpm` (a39e6dd + capability fix d91f8a8 + docs); live lifecycle verified 2026-09-10: clean install via local test repo (dnf5 @commandline provide-resolution quirk documented; unsigned local packages need --nogpgcheck), desktop-menu launch confirmed by owner, service upgrade 0.1.0-1→0.1.0-2 with scriptlets, GUI removal removes dep-installed service (owner-preferred, dnf5 orphan cleanup, GUI owns no service files); executor: root (zai/glm-5.3, session default)
-- [ ] Phase 7 — Flatpak GUI Delivery
+- [x] Phase 7 — Flatpak GUI Delivery — owner-accepted 2026-09-10 for merge/push; `feat/initial-07-flatpak`; offline build/user install, embedded frontend startup and narrow permissions verified; `just check-all` passed (44 tests). Live host-service interoperability/write checks remain unverified; see Phase 7 closeout evidence.

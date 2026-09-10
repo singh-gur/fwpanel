@@ -1,0 +1,8 @@
+[Desktop Entry]
+Categories=Utility;
+Comment=Control panel for Framework laptops
+Exec=fwpanel
+Icon=io.github.singh_gur.fwpanel
+Name=fwpanel
+Terminal=false
+Type=Application

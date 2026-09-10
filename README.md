@@ -123,6 +123,36 @@ sudo systemctl daemon-reload
 sudo systemctl reset-failed 2>/dev/null || true
 ```
 
+## Local Flatpak installation
+
+The Flatpak contains only the unprivileged GUI. On Fedora 44 x86_64, build
+and install the host-service RPM separately in an administrator session:
+
+```bash
+just build-service-rpm
+sudo dnf install ./stage/rpm/RPMS/x86_64/fwpanel-service-0.1.0-2.fc44.x86_64.rpm
+just check-service
+```
+
+Install `flatpak-builder` and configure a user Flathub remote first. Then:
+
+```bash
+just build-flatpak       # builds offline and installs for your user
+just check-flatpak       # inspect the narrow sandbox permissions
+flatpak run io.github.singh_gur.fwpanel
+```
+
+The builder installs the pinned GNOME 49 runtime/SDK and Rust/Node SDK
+extensions from Flathub; source downloads happen before the offline build.
+`just flatpak-sources` regenerates dependency manifests after lockfile changes.
+The app itself is a local build, not published on Flathub.
+
+Flatpak cannot install or upgrade the privileged host service. Upgrade its RPM
+separately with DNF when needed; both packages must support protocol major 1.
+If the dashboard cannot connect, run `just check-service` on the host. An
+AccessDenied transport error can currently appear as “Not installed or not
+running”; reinstalling the Flatpak alone does not repair missing host policy.
+
 ## Project layout
 
 ```

@@ -71,5 +71,18 @@ build-rpm: build-service-rpm
 check-service:
     packaging/check-service.sh
 
+# Generate the pinned Flatpak offline source manifests.
+flatpak-sources:
+    packaging/flatpak/generate-sources.sh
+
+# Build and install the Flatpak GUI locally (user installation, no root).
+build-flatpak:
+    flatpak-builder --user --install-deps-from=flathub --install --force-clean \
+        stage/flatpak/build packaging/flatpak/io.github.singh-gur.fwpanel.yml
+
+# Read-only Flatpak checks (permissions of the installed app).
+check-flatpak:
+    flatpak info --show-permissions io.github.singh_gur.fwpanel
+
 # All static checks: frontend types + Rust format/lint/tests.
 check-all: check fmt-check clippy test

@@ -38,8 +38,7 @@ discovery, CLI subprocesses, text-output parsing, or CLI/port-I/O fallbacks.
 
 The root `Cargo.toml` defines the workspace; `crates/fwpanel-protocol` holds
 the shared serde DTOs/reply envelope/validation and `crates/fwpanel-service`
-is the privileged host service (currently serving `GetServiceInfo` only;
-hardware methods return `unsupported_feature` until their phases).
+is the privileged host service serving the five methods listed above.
 
 Rules for implementation:
 
@@ -95,6 +94,14 @@ Rules for implementation:
 | Check installed service | `just check-service` (read-only) |
 | Build service RPM | `just build-service-rpm` → `stage/rpm/RPMS/x86_64/` |
 | Build both RPMs | `just build-rpm` → service + `target/release/bundle/rpm/` |
+| Build/install user Flatpak | `just build-flatpak` |
+| Check Flatpak permissions | `just check-flatpak` |
+
+The Flatpak's direct Cargo build must pass `--features tauri/custom-protocol`
+to embed/load the frontend; `--release` alone still uses the development URL.
+The privileged host service remains a separately installed RPM. Phase 7 is
+owner-accepted; live Flatpak/service checks and known polling/error-label issues
+remain outstanding as recorded in `plans/initial-development.md`.
 
 There is no frontend test runner yet. Non-trivial conversion, validation, and
 error logic gets unit tests; service authorization and hardware checks follow
@@ -115,7 +122,7 @@ src-tauri/            Rust GUI backend
 crates/
   fwpanel-protocol/   Shared wire DTOs, reply envelope, validation, tests
   fwpanel-service/    Privileged host service: D-Bus + polkit + hardware gate
-                      (battery/charge-limit reads live; ports/deck/write later)
+                      (battery/charge-limit, ports/deck reads, authorized writes)
 packaging/            systemd/D-Bus/polkit assets, stage-service.sh, check-service.sh
 static/               Static assets copied verbatim
 ```

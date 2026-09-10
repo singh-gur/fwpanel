@@ -5,40 +5,62 @@ use fwpanel_protocol::{
     ChargeLimits, InputDeckSnapshot, PortsSnapshot, PowerSnapshot, ServiceInfo,
 };
 
+/// Temporary Phase 7 diagnostic: surface every failed service call on stderr
+/// so sandboxed-run failures are visible outside the webview.
+macro_rules! log_err {
+    ($name:literal, $e:expr) => {{
+        let e = $e;
+        if let Err(ref m) = e {
+            eprintln!("fwpanel: {} failed: {}", $name, m);
+        }
+        e
+    }};
+}
+
 #[tauri::command]
 async fn get_service_info() -> Result<ServiceInfo, String> {
     // Blocking D-Bus call stays off the GUI thread and the async executor.
-    tauri::async_runtime::spawn_blocking(service::get_service_info)
+    let r = tauri::async_runtime::spawn_blocking(service::get_service_info)
         .await
-        .map_err(|e| format!("service call task failed: {e}"))?
+        .map_err(|e| format!("service call task failed: {e}"))
+        .and_then(|r| r);
+    log_err!("GetServiceInfo", r)
 }
 
 #[tauri::command]
 async fn get_power() -> Result<PowerSnapshot, String> {
-    tauri::async_runtime::spawn_blocking(service::get_power)
+    let r = tauri::async_runtime::spawn_blocking(service::get_power)
         .await
-        .map_err(|e| format!("service call task failed: {e}"))?
+        .map_err(|e| format!("service call task failed: {e}"))
+        .and_then(|r| r);
+    log_err!("GetPower", r)
 }
 
 #[tauri::command]
 async fn get_ports() -> Result<PortsSnapshot, String> {
-    tauri::async_runtime::spawn_blocking(service::get_ports)
+    let r = tauri::async_runtime::spawn_blocking(service::get_ports)
         .await
-        .map_err(|e| format!("service call task failed: {e}"))?
+        .map_err(|e| format!("service call task failed: {e}"))
+        .and_then(|r| r);
+    log_err!("GetPorts", r)
 }
 
 #[tauri::command]
 async fn get_input_deck() -> Result<InputDeckSnapshot, String> {
-    tauri::async_runtime::spawn_blocking(service::get_input_deck)
+    let r = tauri::async_runtime::spawn_blocking(service::get_input_deck)
         .await
-        .map_err(|e| format!("service call task failed: {e}"))?
+        .map_err(|e| format!("service call task failed: {e}"))
+        .and_then(|r| r);
+    log_err!("GetInputDeck", r)
 }
 
 #[tauri::command]
 async fn set_charge_limit(maximum: u32) -> Result<ChargeLimits, String> {
-    tauri::async_runtime::spawn_blocking(move || service::set_charge_limit(maximum))
+    let r = tauri::async_runtime::spawn_blocking(move || service::set_charge_limit(maximum))
         .await
-        .map_err(|e| format!("service call task failed: {e}"))?
+        .map_err(|e| format!("service call task failed: {e}"))
+        .and_then(|r| r);
+    log_err!("SetChargeLimit", r)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
