@@ -23,7 +23,6 @@ use framework_lib::smbios::{self, Platform};
 use fwpanel_protocol::{
     feature, Battery, ChargeLimitReading, ChargeLimits, ErrorCode, PowerSnapshot,
 };
-
 /// Maximum duration of a single hardware operation.
 const HARDWARE_DEADLINE: Duration = Duration::from_secs(5);
 
@@ -98,6 +97,120 @@ impl HardwareAccess {
         })
         .await
         .and_then(|inner| inner)
+    }
+
+    /// Serve `SetChargeLimit` (Phase 4): one authorized change under the
+    /// hardware gate — read current limits, write once, verify by readback.
+    pub async fn set_charge_limit(&self, maximum: u8) -> Result<ChargeLimits, HardwareError> {
+        let (ec, gate) = self.access()?;
+        let ec_read = ec.clone();
+        let ec_write = ec.clone();
+        let ec_verify = ec.clone();
+        gate.run(move || {
+            ChargeLimitOps {
+                read: move || ec_read.get_charge_limit(),
+                write: move |min, max| ec_write.set_charge_limit(min, max),
+                verify: move || ec_verify.get_charge_limit(),
+            }
+            .run_once(maximum)
+        })
+        .await
+        .and_then(|inner| inner)
+    }
+}
+
+/// Ordered EC operations for one authorized charge-limit change. Kept as a
+/// private closure seam so tests can prove call ordering without hardware.
+pub(crate) struct ChargeLimitOps<R, W, V> {
+    pub(crate) read: R,
+    pub(crate) write: W,
+    pub(crate) verify: V,
+}
+
+impl<R, W, V> ChargeLimitOps<R, W, V>
+where
+    R: FnOnce() -> EcResult<(u8, u8)>,
+    W: FnOnce(u8, u8) -> EcResult<()>,
+    V: FnOnce() -> EcResult<(u8, u8)>,
+{
+    /// One change: validate the current pair, write at most once, and only
+    /// report success when the readback matches the request with the minimum
+    /// preserved. Never retries.
+    pub(crate) fn run_once(self, requested_maximum: u8) -> Result<ChargeLimits, HardwareError> {
+        let (min, max) = (self.read)().map_err(|e| {
+            HardwareError::new(
+                ErrorCode::HardwareUnavailable,
+                format!("charge-limit read failed: {e:?}"),
+            )
+        })?;
+        let current = ChargeLimits {
+            minimum_percent: min,
+            maximum_percent: max,
+        }
+        .validated()
+        .map_err(|_| {
+            HardwareError::new(
+                ErrorCode::InvalidData,
+                "implausible current charge limits read from the EC",
+            )
+        })?;
+
+        if requested_maximum < current.minimum_percent {
+            return Err(HardwareError::new(
+                ErrorCode::InvalidArgument,
+                format!(
+                    "requested maximum {} is below the current minimum {}",
+                    requested_maximum, current.minimum_percent
+                ),
+            ));
+        }
+        if requested_maximum == current.maximum_percent {
+            // Already at the requested value: no unnecessary EC write.
+            return Ok(current);
+        }
+
+        (self.write)(current.minimum_percent, requested_maximum).map_err(|e| {
+            HardwareError::new(
+                ErrorCode::HardwareUnavailable,
+                format!("charge-limit write failed: {e:?}"),
+            )
+        })?;
+
+        let (vmin, vmax) = (self.verify)().map_err(|e| {
+            HardwareError::new(
+                ErrorCode::OutcomeUnknown,
+                format!("charge-limit verification read failed: {e:?}"),
+            )
+        })?;
+        let verified = ChargeLimits {
+            minimum_percent: vmin,
+            maximum_percent: vmax,
+        }
+        .validated()
+        .map_err(|_| {
+            HardwareError::new(
+                ErrorCode::OutcomeUnknown,
+                "implausible charge limits read back after the write",
+            )
+        })?;
+
+        if verified.maximum_percent == requested_maximum
+            && verified.minimum_percent == current.minimum_percent
+        {
+            Ok(verified)
+        } else {
+            Err(HardwareError::new(
+                ErrorCode::OutcomeUnknown,
+                format!(
+                    "charge-limit verification mismatch: expected max {} with min {}, \
+                     read back max {} with min {}; run a refresh to see the actual setting",
+                    requested_maximum,
+                    current.minimum_percent,
+                    verified.maximum_percent,
+                    verified.minimum_percent
+                ),
+            ))
+        }
     }
 }
 
@@ -265,6 +378,7 @@ pub fn implemented_features() -> Vec<String> {
     vec![
         feature::BATTERY.to_string(),
         feature::CHARGE_LIMIT_READ.to_string(),
+        feature::CHARGE_LIMIT_WRITE.to_string(),
     ]
 }
 
@@ -416,10 +530,149 @@ mod tests {
     }
 
     #[test]
-    fn features_advertise_power_reads_only() {
+    fn features_advertise_power_reads_and_write() {
         let features = implemented_features();
         assert!(features.contains(&"battery".to_string()));
         assert!(features.contains(&"charge_limit_read".to_string()));
-        assert!(!features.contains(&"charge_limit_write".to_string()));
+        assert!(features.contains(&"charge_limit_write".to_string()));
+        assert!(!features.contains(&"ports".to_string()));
+    }
+
+    /// Call-order log for the charge-limit seam tests.
+    type Log = std::sync::Arc<std::sync::Mutex<Vec<&'static str>>>;
+    type BoxedRead = Box<dyn FnOnce() -> EcResult<(u8, u8)>>;
+    type BoxedWrite = Box<dyn FnOnce(u8, u8) -> EcResult<()>>;
+    type BoxedVerify = Box<dyn FnOnce() -> EcResult<(u8, u8)>>;
+
+    fn ops_with(
+        log: &Log,
+        current: (u8, u8),
+        write_result: Option<EcResult<()>>,
+        verify_result: Option<EcResult<(u8, u8)>>,
+    ) -> ChargeLimitOps<BoxedRead, BoxedWrite, BoxedVerify> {
+        let log_r = std::sync::Arc::clone(log);
+        let log_w = std::sync::Arc::clone(log);
+        let log_v = std::sync::Arc::clone(log);
+        ChargeLimitOps {
+            read: Box::new(move || {
+                log_r.lock().unwrap().push("read");
+                Ok(current)
+            }),
+            write: Box::new(move |min, max| {
+                log_w.lock().unwrap().push("write");
+                assert_eq!((min, max), (current.0, max));
+                write_result.unwrap_or(Ok(()))
+            }),
+            verify: Box::new(move || {
+                log_v.lock().unwrap().push("verify");
+                verify_result.unwrap_or(Ok((current.0, 90)))
+            }),
+        }
+    }
+
+    #[test]
+    fn charge_limit_write_preserves_minimum_and_verifies() {
+        let log: Log = Default::default();
+        let limits = ops_with(&log, (40, 80), Some(Ok(())), Some(Ok((40, 90))))
+            .run_once(90)
+            .unwrap();
+        assert_eq!((limits.minimum_percent, limits.maximum_percent), (40, 90));
+        assert_eq!(*log.lock().unwrap(), vec!["read", "write", "verify"]);
+    }
+
+    #[test]
+    fn charge_limit_noop_skips_the_ec_write() {
+        let log: Log = Default::default();
+        let limits = ops_with(&log, (40, 80), Some(Ok(())), None)
+            .run_once(80)
+            .unwrap();
+        assert_eq!((limits.minimum_percent, limits.maximum_percent), (40, 80));
+        assert_eq!(*log.lock().unwrap(), vec!["read"]);
+    }
+
+    #[test]
+    fn charge_limit_below_current_minimum_is_rejected_without_write() {
+        let log: Log = Default::default();
+        let err = ops_with(&log, (40, 80), Some(Ok(())), None)
+            .run_once(30)
+            .unwrap_err();
+        assert_eq!(err.code, ErrorCode::InvalidArgument);
+        assert_eq!(*log.lock().unwrap(), vec!["read"]);
+    }
+
+    #[test]
+    fn charge_limit_sentinel_minimum_is_rejected_without_write() {
+        let log: Log = Default::default();
+        let err = ops_with(&log, (0xFF, 80), Some(Ok(())), None)
+            .run_once(90)
+            .unwrap_err();
+        assert_eq!(err.code, ErrorCode::InvalidData);
+        assert_eq!(*log.lock().unwrap(), vec!["read"]);
+    }
+
+    #[test]
+    fn charge_limit_write_failure_stops_before_verify() {
+        let log: Log = Default::default();
+        let err = ops_with(
+            &log,
+            (40, 80),
+            Some(Err(framework_lib::chromium_ec::EcError::DeviceError(
+                "io".into(),
+            ))),
+            None,
+        )
+        .run_once(90)
+        .unwrap_err();
+        assert_eq!(err.code, ErrorCode::HardwareUnavailable);
+        assert_eq!(*log.lock().unwrap(), vec!["read", "write"]);
+    }
+
+    #[test]
+    fn charge_limit_verify_read_failure_is_outcome_unknown() {
+        let log: Log = Default::default();
+        let err = ops_with(
+            &log,
+            (40, 80),
+            Some(Ok(())),
+            Some(Err(framework_lib::chromium_ec::EcError::DeviceError(
+                "io".into(),
+            ))),
+        )
+        .run_once(90)
+        .unwrap_err();
+        assert_eq!(err.code, ErrorCode::OutcomeUnknown);
+        assert_eq!(*log.lock().unwrap(), vec!["read", "write", "verify"]);
+    }
+
+    #[test]
+    fn charge_limit_readback_mismatch_is_outcome_unknown() {
+        let log: Log = Default::default();
+        // Max did not reach the requested value.
+        let err = ops_with(&log, (40, 80), Some(Ok(())), Some(Ok((40, 95))))
+            .run_once(90)
+            .unwrap_err();
+        assert_eq!(err.code, ErrorCode::OutcomeUnknown);
+        // Minimum changed by the write: still not success.
+        let err = ops_with(&log, (40, 80), Some(Ok(())), Some(Ok((50, 90))))
+            .run_once(90)
+            .unwrap_err();
+        assert_eq!(err.code, ErrorCode::OutcomeUnknown);
+        assert_eq!(
+            *log.lock().unwrap(),
+            vec!["read", "write", "verify", "read", "write", "verify"]
+        );
+    }
+
+    #[test]
+    fn charge_limit_writes_at_most_once() {
+        let log: Log = Default::default();
+        let _ = ops_with(&log, (40, 80), Some(Ok(())), Some(Ok((40, 95)))).run_once(90);
+        let writes = log
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|c| **c == "write")
+            .count();
+        assert_eq!(writes, 1);
     }
 }

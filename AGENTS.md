@@ -14,10 +14,15 @@ The frontend is Svelte 5 runes + TypeScript (strict): the dashboard
 (`src/routes/+page.svelte`) polls `get_service_info`/`get_power` sequentially
 (refresh on show, 5s after each finished refresh, paused while hidden,
 manual Retry joins the in-flight refresh) and keeps typed DTO mirrors in
-`src/lib/types.ts`. `crates/fwpanel-service` serves `GetServiceInfo` and
-`GetPower` (battery/AC plus charge-limit reads through `framework_lib =0.6.5`,
-kernel cros_ec driver only, supported only on Framework Laptop 13 AMD Ryzen AI
-300); ports/deck/write return `unsupported_feature` until their phases. Follow
+`src/lib/types.ts`. The charge-limit control
+(`src/lib/components/ChargeLimitControl.svelte`) applies changes only through
+explicit Apply; the service validates, authorizes via polkit (admin prompt,
+bounded, caller-disappearance-cancelled), writes once under the hardware gate,
+and verifies by readback — no automatic retries. `crates/fwpanel-service`
+serves `GetServiceInfo`, `GetPower`, and `SetChargeLimit` (battery/AC/charge
+limit through `framework_lib =0.6.5`, kernel cros_ec driver only, supported
+only on Framework Laptop 13 AMD Ryzen AI 300); ports/deck return
+`unsupported_feature` until their phases. Follow
 [plans/initial-development.md](plans/initial-development.md) for contracts and
 owner-approved phase gates. First supported target: Framework Laptop 13
 AMD Ryzen AI 300 on Fedora 44 x86_64.
@@ -55,8 +60,10 @@ Rules for implementation:
   are denied. Only an explicit charge-limit Apply may request administrator
   authentication. Polling must never trigger authentication.
 - Expose only the plan's named status and charge-limit methods, not arbitrary
-  commands, paths, or EC requests. Validate writes in the service, preserve the
-  existing minimum, verify readback, and never automatically retry a mutation.
+  commands, paths, or EC requests. Validate writes at both trust boundaries,
+  preserve the existing minimum, verify readback, and never automatically
+  retry a mutation (see `set_charge_limit` in `crates/fwpanel-service/src/main.rs`
+  and `ChargeLimitOps` in `src/hardware.rs`).
 - Keep blocking hardware work off UI/async executor threads, serialize it
   (single non-queuing gate in `crates/fwpanel-service/src/hardware.rs`), and
   follow the plan's timeout/recovery rules: a timed-out or panicking hardware

@@ -306,7 +306,7 @@ Usable read-only dashboard, removed scaffold assets, minimal application permiss
 ## Phase 4 — Authenticated Charge-Limit Control
 
 - **Objective:** safely apply and verify a maximum charge limit through a narrow authorized operation.
-- **Status:** Not Started
+- **Status:** Complete (owner-accepted 2026-09-10; merged to main).
 - **Complexity:** High
 - **Estimated Time:** 60–120 minutes
 - **Prerequisites:** Phase 3 accepted; separate owner approval for a reversible real hardware write test.
@@ -338,11 +338,11 @@ Apply global rules. Record original/requested/read-back/restored limits for owne
 
 ### Verification
 
-- [ ] All frontend/workspace checks pass; validation and authorization tests prove rejected paths do not call hardware mutation.
-- [ ] Manual authentication cancellation leaves the original setting unchanged; reads/polling never trigger authentication dialogs.
-- [ ] With owner approval, record the original setting, apply a distinct safe permitted maximum, verify actual readback, and restore the original value. If restoration fails, stop and notify the owner immediately.
-- [ ] A client disconnect/service failure produces uncertain status and no automatic replay. Reconnection performs readback before the UI reports the actual setting.
-- [ ] Startup/refresh/reopen cause no write and make no unverified reboot-persistence claim.
+- [x] All frontend/workspace checks pass; validation and authorization tests prove rejected paths do not call hardware mutation. (2026-09-10: 39 tests; gate_after_auth seam proves denied/cancelled/timed-out auth and eligibility loss never reach hardware.)
+- [x] Manual authentication cancellation leaves the original setting unchanged; reads/polling never trigger authentication dialogs. (2026-09-10: owner cancelled one prompt → access_denied, setting unchanged; every one of 6+ writes prompted individually — no retained/temporary auto-approval observed; polls never prompted.)
+- [x] With owner approval, record the original setting, apply a distinct safe permitted maximum, verify actual readback, and restore the original value. (2026-09-10: original 0/100 → applied 80 with verified readback 0/80 (minimum preserved) → restored 100 with verified readback 0/100. Restoration succeeded.)
+- [x] A client disconnect/service failure produces uncertain status and no automatic replay. (Dismissed/timed-out prompt run: client gone during auth → denied, no write dispatched — the disappearance path live-verified; ChargeLimitOps tests prove no automatic retry; the UI re-polls (fresh read) after any failure before reporting the actual setting.)
+- [x] Startup/refresh/reopen cause no write and make no unverified reboot-persistence claim. (Read paths contain no write calls; no persistence claims in UI or docs.)
 
 ### Completion Gate
 
@@ -566,7 +566,7 @@ None blocking the approved plan. System installation, reversible hardware writes
 - [x] Phase 2 — Live Battery and Charge-Limit Reads — owner-accepted 2026-09-10; (23c12b7); review: GATE PASS, no blockers (reviewer zai/glm-5.3/high, run 5e30a80b); live verification 2026-09-10: GetPower on target (on-battery + AC states plausible, percentage internally consistent, limits 0/100, prompts never shown); executor: root (zai/glm-5.3, session default)
 - [ ] Phase 2 — Live Battery and Charge-Limit Reads
 - [x] Phase 3 — Usable Dashboard — owner-accepted 2026-09-10 (manual checklist confirmed); implemented on `feat/initial-03-dashboard` (adca37d, fixes c39487a/f72f2aa); review round 1 FAIL (2 blockers: pending read shown as no-battery, service loss hid stale data) → fixed → round 2 PASS (runs 2a53edf0, e20d4258); pnpm check/build, workspace cargo, dev smoke, release-binary smoke all green; owner manual desktop checklist confirmed; executor: root (zai/glm-5.3, session default)
-- [ ] Phase 4 — Authenticated Charge-Limit Control
+- [x] Phase 4 — Authenticated Charge-Limit Control — owner-accepted 2026-09-10; implemented on `feat/initial-04-charge-limit` (46128e2 + review fixes b494dd5); review: GATE PASS (run 106fa571; N1 denial-tests seam and N2 dead-code fixes applied); live verification 2026-09-10 with owner approval: original 0/100 recorded → 80 applied+verified → 100 restored+verified; cancelled prompt → access_denied with setting unchanged; every write prompted individually; executor: root (zai/glm-5.3, session default)
 - [ ] Phase 5 — USB-C and Input-Deck Status
 - [ ] Phase 6 — Fedora RPM Packaging
 - [ ] Phase 7 — Flatpak GUI Delivery

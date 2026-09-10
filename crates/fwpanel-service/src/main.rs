@@ -11,6 +11,8 @@
 mod auth;
 mod hardware;
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use fwpanel_protocol::{ErrorCode, Reply, ServiceInfo, PROTOCOL_MAJOR};
 use zbus::message::Header;
 
@@ -24,6 +26,8 @@ const LIBRARY_VERSION: &str = "0.6.5";
 struct Fwpanel1 {
     polkit: auth::Polkit,
     hardware: hardware::HardwareAccess,
+    /// Global pending-write guard: at most one authorized change in flight.
+    write_pending: AtomicBool,
 }
 
 #[zbus::interface(name = "io.github.singh_gur.Fwpanel1")]
@@ -62,13 +66,96 @@ impl Fwpanel1 {
     async fn set_charge_limit(
         &self,
         #[zbus(header)] header: Header<'_>,
-        _maximum: u32,
+        maximum: u32,
     ) -> zbus::fdo::Result<String> {
-        self.unimplemented(&header).await
+        // 1. Active-local read access (no prompt).
+        if let Err(reply) = self.require_read_access(&header).await {
+            return Ok(reply);
+        }
+        // 2. Trust-boundary validation of the request itself.
+        let maximum = match fwpanel_protocol::validate_charge_limit_request(maximum) {
+            Ok(maximum) => maximum,
+            Err(_) => {
+                return Ok(error_json(
+                    ErrorCode::InvalidArgument,
+                    "charge-limit maximum must be an integer between 25 and 100",
+                ))
+            }
+        };
+        // 3. One pending write globally; competing writes get busy. The auth
+        //    prompt deliberately does NOT hold the hardware-read gate.
+        if self.write_pending.swap(true, Ordering::SeqCst) {
+            return Ok(error_json(
+                ErrorCode::Busy,
+                "another charge-limit change is already in progress",
+            ));
+        }
+        struct WritePendingGuard<'a>(&'a AtomicBool);
+        impl Drop for WritePendingGuard<'_> {
+            fn drop(&mut self) {
+                self.0.store(false, Ordering::SeqCst);
+            }
+        }
+        let _guard = WritePendingGuard(&self.write_pending);
+
+        let sender = match header.sender() {
+            Some(name) => name.to_string(),
+            None => {
+                return Ok(error_json(
+                    ErrorCode::AccessDenied,
+                    "requests without a sender are not authorized",
+                ))
+            }
+        };
+        // 4. Bounded administrator authorization; any denial, cancellation,
+        //    disappearance, timeout, or polkit error stops here.
+        let auth = self.polkit.check_write_bounded(&sender).await;
+        // 5. Recheck presence and read access after the prompt completed.
+        //    `gate_after_auth` is the single decision point: only Ok(())
+        //    proceeds to hardware.
+        if let Err((code, message)) = Self::gate_after_auth(
+            auth,
+            self.polkit.caller_present(&sender).await,
+            self.polkit.check_read(&sender).await,
+        ) {
+            return Ok(error_json(code, message));
+        }
+        // 6. One authorized hardware change with readback verification.
+        match self.hardware.set_charge_limit(maximum).await {
+            Ok(limits) => ok_json(&limits),
+            Err(e) => Ok(error_json(e.code, &e.message)),
+        }
     }
 }
 
 impl Fwpanel1 {
+    /// The single decision point between authorization and hardware: any
+    /// non-authorized outcome, caller disappearance, or eligibility loss stops
+    /// the write. Extracted so tests can prove denied paths never proceed.
+    fn gate_after_auth(
+        auth: auth::WriteAuthOutcome,
+        caller_present: bool,
+        read_access: bool,
+    ) -> Result<(), (ErrorCode, &'static str)> {
+        if auth != auth::WriteAuthOutcome::Authorized {
+            let message = match auth {
+                auth::WriteAuthOutcome::Disappeared => {
+                    "the requesting client went away during authorization"
+                }
+                auth::WriteAuthOutcome::TimedOut => "authorization timed out",
+                _ => "administrator authorization was denied or unavailable",
+            };
+            return Err((ErrorCode::AccessDenied, message));
+        }
+        if !(caller_present && read_access) {
+            return Err((
+                ErrorCode::AccessDenied,
+                "the requesting session is no longer eligible",
+            ));
+        }
+        Ok(())
+    }
+
     /// Authorize a read with the message's real sender; interaction flags
     /// zero so polling can never prompt. On failure, returns the error reply
     /// JSON to send instead of `()`.
@@ -129,7 +216,11 @@ fn error_json(code: ErrorCode, message: &str) -> String {
 async fn main() -> zbus::Result<()> {
     let polkit = auth::Polkit::connect().await?;
     let hardware = hardware::HardwareAccess::detect();
-    let service = Fwpanel1 { polkit, hardware };
+    let service = Fwpanel1 {
+        polkit,
+        hardware,
+        write_pending: AtomicBool::new(false),
+    };
     let _connection = zbus::connection::Builder::system()?
         .name(BUS_NAME)?
         .serve_at(OBJECT_PATH, service)?
@@ -145,12 +236,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn service_info_advertises_power_reads_only() {
+    fn service_info_advertises_implemented_features_only() {
         let info = service_info();
         assert_eq!(info.protocol_version, PROTOCOL_MAJOR);
         assert_eq!(info.library_version, LIBRARY_VERSION);
         assert_eq!(info.features, hardware::implemented_features());
-        assert!(!info.features.iter().any(|f| f == "charge_limit_write"));
+        assert!(!info
+            .features
+            .iter()
+            .any(|f| f == "ports" || f == "input_deck"));
     }
 
     #[test]
@@ -161,6 +255,39 @@ mod tests {
         assert_eq!(
             auth::ACTION_SET_CHARGE_LIMIT,
             "io.github.singh_gur.fwpanel.set-charge-limit"
+        );
+    }
+
+    #[test]
+    fn denied_cancelled_or_timed_out_auth_never_proceeds_to_hardware() {
+        use auth::WriteAuthOutcome;
+        for outcome in [
+            WriteAuthOutcome::Denied,
+            WriteAuthOutcome::Disappeared,
+            WriteAuthOutcome::TimedOut,
+        ] {
+            // Even with the caller present and eligible, a non-authorized
+            // outcome stops before the hardware step.
+            let decision = Fwpanel1::gate_after_auth(outcome, true, true);
+            assert_eq!(decision.unwrap_err().0, ErrorCode::AccessDenied);
+        }
+    }
+
+    #[test]
+    fn authorized_write_still_requires_present_eligible_caller() {
+        use auth::WriteAuthOutcome;
+        assert!(Fwpanel1::gate_after_auth(WriteAuthOutcome::Authorized, true, true).is_ok());
+        assert_eq!(
+            Fwpanel1::gate_after_auth(WriteAuthOutcome::Authorized, false, true)
+                .unwrap_err()
+                .0,
+            ErrorCode::AccessDenied
+        );
+        assert_eq!(
+            Fwpanel1::gate_after_auth(WriteAuthOutcome::Authorized, true, false)
+                .unwrap_err()
+                .0,
+            ErrorCode::AccessDenied
         );
     }
 
