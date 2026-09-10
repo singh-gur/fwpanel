@@ -7,7 +7,7 @@
 # The `just build-service-rpm` recipe wires the paths.
 Name:           fwpanel-service
 Version:        0.1.0
-Release:        1%{?dist}
+Release:        2%{?dist}
 Summary:        Privileged fwpanel host service for Framework laptops
 
 License:        MIT
@@ -60,6 +60,9 @@ install -D -m 0644 "%{fwpanel_repo}/LICENSE" \
 /usr/bin/systemctl daemon-reload
 
 %changelog
+* Thu Sep 10 2026 fwpanel maintainer <singh-gur@localhost> - 0.1.0-2
+- Upgrade-path test release (no content changes).
+
 * Thu Sep 10 2026 fwpanel maintainer <singh-gur@localhost> - 0.1.0-1
 - Initial service package (protocol 1; GetServiceInfo, GetPower, GetPorts,
   GetInputDeck, SetChargeLimit).
