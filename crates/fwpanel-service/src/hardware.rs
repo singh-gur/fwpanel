@@ -475,7 +475,9 @@ fn map_port(index: u8, info: &UsbPdPowerInfo) -> Result<Port, fwpanel_protocol::
         current_limit_ma: info.meas.current_lim as u32,
         max_current_ma: info.meas.current_max as u32,
         dual_role: info.dualrole,
-        max_power_mw: info.max_power,
+        // Upstream prints `max_power / 1000` as mW (power.rs:978): the raw EC
+        // value is µW. Live check: 20 V × 3 A contract reads 60 000 000 µW.
+        max_power_mw: info.max_power / 1000,
     }
     .validated()
 }
@@ -694,7 +696,7 @@ mod tests {
                 current_max: 5_000,
                 current_lim,
             },
-            max_power: 65_000,
+            max_power: 65_000_000,
         })
     }
 
