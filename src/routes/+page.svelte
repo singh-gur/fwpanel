@@ -1,156 +1,442 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
+  import type { PowerSnapshot, ServiceInfo } from "$lib/types";
 
-  let name = $state("");
-  let greetMsg = $state("");
+  // Service connection state. Kinds map to the stable "service-*" prefixes
+  // produced by src-tauri/src/service.rs.
+  type ServiceState =
+    | { kind: "connecting" }
+    | { kind: "ok"; info: ServiceInfo }
+    | { kind: "unavailable" }
+    | { kind: "denied" }
+    | { kind: "incompatible" }
+    | { kind: "error"; message: string };
 
-  async function greet(event: Event) {
-    event.preventDefault();
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    greetMsg = await invoke("greet", { name });
+  let serviceState: ServiceState = $state({ kind: "connecting" });
+  let power = $state<PowerSnapshot | null>(null);
+  // Non-null while the latest power read failed; the previous reading (if any)
+  // stays visible and is labeled stale instead of being replaced by zeros.
+  let powerError: string | null = $state(null);
+  let lastSuccessAt = $state<Date | null>(null);
+  let refreshing = $state(false);
+  let announcement = $state("");
+
+  const REFRESH_INTERVAL_MS = 5000;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let disposed = false;
+  let announcedKind = "connecting";
+
+  function classify(detail: string): ServiceState {
+    if (detail.startsWith("service-unavailable")) return { kind: "unavailable" };
+    if (detail.startsWith("service-denied")) return { kind: "denied" };
+    if (
+      detail.startsWith("service-incompatible") ||
+      detail.startsWith("service-invalid-reply")
+    ) {
+      return { kind: "incompatible" };
+    }
+    return { kind: "error", message: detail };
   }
+
+  async function guard<T>(call: Promise<T>): Promise<T> {
+    const result = await call;
+    // A response that arrives after teardown must not touch destroyed state.
+    if (disposed) throw new Error("component teardown");
+    return result;
+  }
+
+  // One refresh cycle: sequential calls (the service serializes hardware
+  // reads anyway), service info first so its failure colors everything.
+  async function refreshOnce(): Promise<void> {
+    if (refreshing) return; // manual refresh joins/skips an in-flight one
+    refreshing = true;
+    try {
+      try {
+        const info = await guard(invoke<ServiceInfo>("get_service_info"));
+        serviceState = { kind: "ok", info };
+      } catch (e) {
+        if (disposed) return;
+        serviceState = classify(String(e));
+        powerError = "fwpanel service problem — data not refreshed.";
+        return;
+      }
+      try {
+        const snapshot = await guard(invoke<PowerSnapshot>("get_power"));
+        power = snapshot;
+        powerError = null;
+        lastSuccessAt = new Date();
+      } catch (e) {
+        if (disposed) return;
+        powerError = String(e);
+      }
+    } finally {
+      refreshing = false;
+    }
+  }
+
+  // Schedule the next poll five seconds after this refresh finishes; never
+  // while the document is hidden.
+  async function refreshCycle(): Promise<void> {
+    await refreshOnce();
+    if (!disposed && !document.hidden) {
+      clearTimeout(timer);
+      timer = setTimeout(() => void refreshCycle(), REFRESH_INTERVAL_MS);
+    }
+  }
+
+  function manualRefresh() {
+    void refreshCycle();
+  }
+
+  $effect(() => {
+    disposed = false;
+    void refreshCycle();
+    const onVisibility = () => {
+      if (document.hidden) {
+        clearTimeout(timer); // pause periodic refresh while hidden
+      } else {
+        void refreshCycle(); // fresh read as soon as we are visible again
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      disposed = true;
+      document.removeEventListener("visibilitychange", onVisibility);
+      clearTimeout(timer);
+    };
+  });
+
+  // Announce state transitions only — not every poll.
+  $effect(() => {
+    const kind = serviceState.kind;
+    if (kind !== announcedKind) {
+      announcedKind = kind;
+      announcement =
+        kind === "ok"
+          ? "fwpanel service connected"
+          : kind === "connecting"
+            ? "Connecting to the fwpanel service"
+            : "fwpanel service problem: " + serviceStatusLabel(kind);
+    }
+  });
+
+  function serviceStatusLabel(kind: string): string {
+    switch (kind) {
+      case "ok":
+        return "Connected";
+      case "connecting":
+        return "Connecting…";
+      case "unavailable":
+        return "Not installed or not running";
+      case "denied":
+        return "Access denied for this session";
+      case "incompatible":
+        return "Incompatible service version";
+      default:
+        return "Service error";
+    }
+  }
+
+  const batteryStale = $derived(powerError !== null && power !== null);
+
+  function timeLabel(date: Date | null): string {
+    return date ? date.toLocaleTimeString() : "";
+  }
+
+  const battery = $derived(power?.battery ?? null);
+  const chargeLimit = $derived(power?.charge_limit ?? null);
 </script>
 
-<main class="container">
-  <h1>Welcome to Tauri + Svelte</h1>
+<main>
+  <header>
+    <h1>fwpanel</h1>
+    <p class="service-status" data-state={serviceState.kind}>
+      <span class="state">{serviceStatusLabel(serviceState.kind)}</span>
+      {#if serviceState.kind === "ok"}
+        <span class="meta">
+          service {serviceState.info.service_version} · library
+          {serviceState.info.library_version}
+        </span>
+      {:else if serviceState.kind === "unavailable"}
+        <span class="meta">install fwpanel-service, then press Retry</span>
+      {:else if serviceState.kind === "incompatible"}
+        <span class="meta">update fwpanel-service or the app</span>
+      {:else if serviceState.kind === "error"}
+        <span class="meta">{serviceState.message}</span>
+      {/if}
+    </p>
+    <button type="button" onclick={manualRefresh} disabled={refreshing}>
+      {refreshing ? "Refreshing…" : "Retry"}
+    </button>
+  </header>
 
-  <div class="row">
-    <a href="https://vite.dev" target="_blank">
-      <img src="/vite.svg" class="logo vite" alt="Vite Logo" />
-    </a>
-    <a href="https://tauri.app" target="_blank">
-      <img src="/tauri.svg" class="logo tauri" alt="Tauri Logo" />
-    </a>
-    <a href="https://svelte.dev" target="_blank">
-      <img src="/svelte.svg" class="logo svelte-kit" alt="SvelteKit Logo" />
-    </a>
-  </div>
-  <p>Click on the Tauri, Vite, and SvelteKit logos to learn more.</p>
+  <p class="announcement" role="status" aria-live="polite">{announcement}</p>
 
-  <form class="row" onsubmit={greet}>
-    <input id="greet-input" placeholder="Enter a name..." bind:value={name} />
-    <button type="submit">Greet</button>
-  </form>
-  <p>{greetMsg}</p>
+  {#if power === null && powerError === null}
+    <section class="card" aria-labelledby="battery-heading">
+      <h2 id="battery-heading">Battery</h2>
+      <p>Reading battery status…</p>
+    </section>
+  {:else if battery}
+    <section class="card" aria-labelledby="battery-heading">
+      <h2 id="battery-heading">Battery</h2>
+      {#if batteryStale}
+        <p class="stale-note">
+          <strong>Stale reading</strong> — last successful update
+          {timeLabel(lastSuccessAt)}. {powerError}
+        </p>
+      {/if}
+      <p class="charge">
+        <span class="percent">{battery.percentage}%</span>
+        <span class="state-chips">
+          {#if power?.ac_present}<span class="chip">AC connected</span>{/if}
+          {#if battery.charging}<span class="chip">Charging</span>{/if}
+          {#if battery.discharging}<span class="chip">Discharging</span>{/if}
+          {#if battery.critical}<span class="chip chip-critical">Critical</span>{/if}
+        </span>
+      </p>
+      <dl class="details">
+        <div><dt>Remaining</dt><dd>{battery.remaining_capacity_mah} mAh</dd></div>
+        <div><dt>Last full charge</dt><dd>{battery.last_full_charge_capacity_mah} mAh</dd></div>
+        <div><dt>Design capacity</dt><dd>{battery.design_capacity_mah} mAh</dd></div>
+        <div><dt>Voltage</dt><dd>{battery.voltage_mv / 1000} V</dd></div>
+        <div><dt>Cycle count</dt><dd>{battery.cycle_count}</dd></div>
+      </dl>
+      <p class="hint">Sampled {timeLabel(new Date(power!.timestamp_ms))}</p>
+    </section>
+  {:else if power}
+    <!-- A successful read with battery: null genuinely means no battery. -->
+    <section class="card" aria-labelledby="battery-heading">
+      <h2 id="battery-heading">Battery</h2>
+      <p>No battery detected (running on AC).</p>
+    </section>
+  {:else}
+    <section class="card error" aria-labelledby="battery-heading">
+      <h2 id="battery-heading">Battery</h2>
+      <p>
+        <strong>Battery status unavailable.</strong>
+        {powerError ?? ""}
+      </p>
+      <p class="hint">
+        {#if lastSuccessAt}Last successful read: {timeLabel(lastSuccessAt)}.{/if}
+      </p>
+    </section>
+  {/if}
+
+  <section class="card" aria-labelledby="limit-heading">
+    <h2 id="limit-heading">Charge limit</h2>
+    {#if chargeLimit?.status === "ok"}
+      <p class="charge">
+        <span class="percent">{chargeLimit.limits.maximum_percent}%</span>
+        <span class="meta">maximum · minimum {chargeLimit.limits.minimum_percent}%</span>
+      </p>
+      <p class="hint">
+        Read-only in this version; changing it requires the charge-limit control.
+      </p>
+    {:else if chargeLimit?.status === "failed"}
+      <p>
+        <strong>Charge-limit reading unavailable</strong> — {chargeLimit.message}
+      </p>
+    {:else}
+      <p>Waiting for first reading…</p>
+    {/if}
+  </section>
+
+  <footer>
+    <span class="meta">
+      {#if lastSuccessAt}Last successful read: {timeLabel(lastSuccessAt)}{/if}
+    </span>
+  </footer>
 </main>
 
 <style>
-.logo.vite:hover {
-  filter: drop-shadow(0 0 2em #747bff);
-}
-
-.logo.svelte-kit:hover {
-  filter: drop-shadow(0 0 2em #ff3e00);
-}
-
-:root {
-  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
-  font-size: 16px;
-  line-height: 24px;
-  font-weight: 400;
-
-  color: #0f0f0f;
-  background-color: #f6f6f6;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  -webkit-text-size-adjust: 100%;
-}
-
-.container {
-  margin: 0;
-  padding-top: 10vh;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  text-align: center;
-}
-
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: 0.75s;
-}
-
-.logo.tauri:hover {
-  filter: drop-shadow(0 0 2em #24c8db);
-}
-
-.row {
-  display: flex;
-  justify-content: center;
-}
-
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-
-a:hover {
-  color: #535bf2;
-}
-
-h1 {
-  text-align: center;
-}
-
-input,
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  color: #0f0f0f;
-  background-color: #ffffff;
-  transition: border-color 0.25s;
-  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
-}
-
-button {
-  cursor: pointer;
-}
-
-button:hover {
-  border-color: #396cd8;
-}
-button:active {
-  border-color: #396cd8;
-  background-color: #e8e8e8;
-}
-
-input,
-button {
-  outline: none;
-}
-
-#greet-input {
-  margin-right: 5px;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    color: #f6f6f6;
-    background-color: #2f2f2f;
+  :global(:root) {
+    font-family: system-ui, sans-serif;
+    font-size: 15px;
+    color-scheme: light dark;
+  }
+  :global(body) {
+    margin: 0;
+    background: #f6f6f8;
+    color: #1a1a1f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :global(body) {
+      background: #232329;
+      color: #eeeef2;
+    }
   }
 
-  a:hover {
-    color: #24c8db;
+  main {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 1rem 1.25rem 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
   }
 
-  input,
+  header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+  h1 {
+    font-size: 1.4rem;
+    margin: 0;
+  }
+  .service-status {
+    flex: 1;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 12rem;
+  }
+  .service-status .state {
+    font-weight: 600;
+  }
+  .service-status[data-state="ok"] .state::before {
+    content: "● ";
+  }
+  .service-status[data-state="unavailable"] .state,
+  .service-status[data-state="denied"] .state,
+  .service-status[data-state="incompatible"] .state,
+  .service-status[data-state="error"] .state {
+    color: #b3261e;
+  }
+  @media (prefers-color-scheme: dark) {
+    .service-status[data-state="unavailable"] .state,
+    .service-status[data-state="denied"] .state,
+    .service-status[data-state="incompatible"] .state,
+    .service-status[data-state="error"] .state {
+      color: #ff8a80;
+    }
+  }
+
   button {
-    color: #ffffff;
-    background-color: #0f0f0f98;
+    font: inherit;
+    padding: 0.45em 1.2em;
+    border-radius: 8px;
+    border: 1px solid #7a7a85;
+    background: #fff;
+    color: inherit;
+    cursor: pointer;
   }
-  button:active {
-    background-color: #0f0f0f69;
+  button:disabled {
+    opacity: 0.6;
+    cursor: default;
   }
-}
+  @media (prefers-color-scheme: dark) {
+    button {
+      background: #2e2e36;
+      border-color: #8a8a95;
+    }
+  }
+  button:focus-visible {
+    outline: 2px solid #396cd8;
+    outline-offset: 2px;
+  }
 
+  .announcement {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    margin: -1px;
+  }
+
+  .card {
+    background: #fff;
+    border: 1px solid #d9d9e0;
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+  .card.error {
+    border-color: #b3261e;
+  }
+  @media (prefers-color-scheme: dark) {
+    .card {
+      background: #2b2b33;
+      border-color: #3f3f49;
+    }
+    .card.error {
+      border-color: #ff8a80;
+    }
+  }
+  .card h2 {
+    font-size: 1rem;
+    margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #5f5f6b;
+  }
+
+  .charge {
+    margin: 0;
+    display: flex;
+    align-items: baseline;
+    gap: 0.8rem;
+    flex-wrap: wrap;
+  }
+  .percent {
+    font-size: 2.6rem;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .state-chips {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+  }
+  .chip {
+    border: 1px solid currentColor;
+    border-radius: 999px;
+    padding: 0.1em 0.7em;
+    font-size: 0.85rem;
+  }
+  .chip-critical {
+    font-weight: 700;
+    border-width: 2px;
+  }
+
+  .stale-note {
+    margin: 0;
+    font-style: italic;
+  }
+
+  dl.details {
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+    gap: 0.5rem 1.25rem;
+  }
+  dl.details div {
+    display: flex;
+    flex-direction: column;
+  }
+  dl.details dt {
+    font-size: 0.8rem;
+    color: #5f5f6b;
+  }
+  dl.details dd {
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .hint,
+  .meta {
+    font-size: 0.85rem;
+    color: #5f5f6b;
+    margin: 0;
+  }
+  footer {
+    display: flex;
+    justify-content: flex-end;
+  }
 </style>
