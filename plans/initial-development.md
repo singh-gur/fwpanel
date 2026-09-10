@@ -191,9 +191,9 @@ Apply the global tracking rules. Record staged/installed paths and whether an ow
 - [x] `cargo fmt --all -- --check`, `cargo check --workspace`, `cargo test --workspace`, and `cargo clippy --workspace --all-targets -- -D warnings` succeed. (2026-09-10; 17 tests pass.)
 - [x] `pnpm check` and `pnpm build` succeed with no change to the SvelteKit static/SSR decisions. (0 errors/warnings.)
 - [x] `systemd-analyze verify packaging/systemd/fwpanel-service.service` succeeds after the referenced executable is staged/installed appropriately; record any path-only staging limitation rather than suppressing errors. (Live verify reports only the missing `/usr/libexec/fwpanel-service` — expected pre-install. With `--root=/tmp/fwpanel-stage` the unit parses; remaining complaint is the minimal sysroot lacking system-provided `dbus.socket`, not this unit. Staged smoke run: unprivileged binary reaches the system bus and is correctly refused the root-only bus name.)
-- [ ] After owner installation: `busctl --system introspect io.github.singh_gur.Fwpanel1 /io/github/singh_gur/Fwpanel1` lists only the intended application methods plus standard D-Bus interfaces. **Not Run — service not installed.**
-- [ ] `busctl --system call io.github.singh_gur.Fwpanel1 /io/github/singh_gur/Fwpanel1 io.github.singh_gur.Fwpanel1 GetServiceInfo` returns protocol-1 service information to the active desktop user without a prompt. **Not Run — service not installed.**
-- [ ] Read-access denial and polkit-unavailable conditions do not reach a hardware function. All unimplemented methods return explicit unavailable/unsupported results. (Unit-test level: unimplemented methods authorize first, then return `unsupported_feature`; no hardware functions exist yet. Live denial checks **Not Run — service not installed**.)
+- [x] After owner installation: `busctl --system introspect io.github.singh_gur.Fwpanel1 /io/github/singh_gur/Fwpanel1` lists only the intended application methods plus standard D-Bus interfaces. (2026-09-10: exactly GetServiceInfo/GetPower/GetPorts/GetInputDeck/SetChargeLimit(u)→s plus Introspectable/Peer/Properties.)
+- [x] `busctl --system call io.github.singh_gur.Fwpanel1 /io/github/singh_gur/Fwpanel1 io.github.singh_gur.Fwpanel1 GetServiceInfo` returns protocol-1 service information to the active desktop user without a prompt. (2026-09-10: `{"status":"ok","protocol_version":1,...,"features":[]}`. Also verified: GetPower and SetChargeLimit 80 return `unsupported_feature` with no authentication prompt; polkit EnumerateActions shows read-status 0/0/5 (no/no/authorized) and set-charge-limit 0/0/2 (no/no/auth_admin), no retained variants; service D-Bus-activated and running under the hardened unit.)
+- [x] Read-access denial and polkit-unavailable conditions do not reach a hardware function. All unimplemented methods return explicit unavailable/unsupported results. (Live denial: unit-test level only — no inactive/remote session was available, so the live denial check is **Not Run** per the no-manufactured-evidence rule. Live positive evidence: all four unimplemented methods authorize silently and return `unsupported_feature` without hardware access or write prompts.)
 
 ### Completion Gate
 
@@ -555,8 +555,10 @@ None blocking the approved plan. System installation, reversible hardware writes
 
 ### Execution Tracking (2026-09-10)
 
-- Staged to `/tmp/fwpanel-stage` (modes 0755/0644) for verification only.
-- Owner has **not** installed the service; all installed-service checks are Not Run.
+- Initially staged to `/tmp/fwpanel-stage` for unprivileged verification.
+- Owner staged to `~/fwpanel-stage` and installed all five files in an admin
+  session on 2026-09-10; installed-service checks were then run and recorded
+  above. Removal procedure: README "Host service staging and installation".
 
 ## Progress
 
