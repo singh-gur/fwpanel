@@ -14,10 +14,13 @@ Built with:
 - [SvelteKit 2](https://kit.svelte.dev) + Svelte 5 + TypeScript — UI
 - pnpm — package manager
 
-> Status: scaffold. The hello-world template; the architecture below is approved
-> but not implemented. See the [development plan](plans/initial-development.md).
+> Status: Phase 1 of the [development plan](plans/initial-development.md) is
+> implemented — Cargo workspace, shared protocol crate, privileged host service
+> skeleton with polkit authorization, and packaging assets (pending owner
+> acceptance). The UI is still the template; hardware features and packaging
+> land in later phases.
 
-## Approved architecture (not yet implemented)
+## Approved architecture (service boundary implemented)
 
 ```
 Svelte UI → Tauri commands → system D-Bus → fwpanel-service → framework_lib → hardware
@@ -40,7 +43,7 @@ service. AppImage and Flathub submission are deferred.
 
 ## Prerequisites
 
-- Rust (rustup) and Node.js 20+ / pnpm
+- Rust (rustup) and Node.js 24 / pnpm 12+
 - Linux native deps for Tauri (webkit2gtk 4.1, librsvg, gcc-c++)
 
 Fedora:
@@ -51,9 +54,9 @@ sudo dnf install webkit2gtk4.1-devel librsvg2-devel gcc gcc-c++
 
 Other distros: see [Tauri's Linux prerequisites](https://tauri.app/start/prerequisites/).
 
-The `framework_tool` CLI is not required. The planned hardware features will
-require the separately installed `fwpanel-service`; that service does not exist
-in the current scaffold yet.
+The `framework_tool` CLI is not required and never invoked. Hardware features
+need the separately installed `fwpanel-service` (see below); until it is
+installed, the GUI reports the service as unavailable.
 
 ## Development
 
@@ -62,32 +65,68 @@ pnpm install        # install JS dependencies
 pnpm tauri dev      # run the full app with hot reload
 ```
 
-Checks and builds:
+Checks and builds (workspace-aware):
 
 ```bash
-pnpm check          # svelte-check + TypeScript diagnostics
-pnpm build          # frontend only → build/
-pnpm tauri build    # current scaffold bundles → src-tauri/target/release/bundle/
+pnpm check              # svelte-check + TypeScript diagnostics
+pnpm build              # frontend only → build/
+just check-all          # frontend + cargo fmt/clippy/test for the whole workspace
+pnpm tauri build        # release bundle → target/release/bundle/
 ```
 
-Rust-only checks (from `src-tauri/`):
+Rust commands (`cargo check`/`fmt`/`clippy`/`test`) run from the repo root and
+cover the whole workspace: `src-tauri` plus `crates/fwpanel-protocol` and
+`crates/fwpanel-service`.
+
+## Host service staging and installation
+
+`just stage-service <destdir>` builds the service and stages the executable
+plus its system assets under a caller-owned directory. It performs **no**
+privileged operations. Installing is a separate, explicit owner action; these
+are the five files and their system paths:
+
+| Staged file | System path |
+|---|---|
+| `usr/libexec/fwpanel-service` | `/usr/libexec/fwpanel-service` (0755) |
+| `usr/lib/systemd/system/fwpanel-service.service` | same under `/usr/lib/systemd/system/` (0644) |
+| `usr/share/dbus-1/system-services/io.github.singh_gur.Fwpanel1.service` | same under `/usr/share/dbus-1/system-services/` (0644) |
+| `usr/share/dbus-1/system.d/io.github.singh_gur.Fwpanel1.conf` | same under `/usr/share/dbus-1/system.d/` (0644) |
+| `usr/share/polkit-1/actions/io.github.singh_gur.fwpanel.policy` | same under `/usr/share/polkit-1/actions/` (0644) |
+
+Installation/removal is performed by the machine's owner in an administrator
+session: copy the five files to the listed paths (root-owned, non-user-
+writable), then `sudo systemctl daemon-reload` (and `sudo systemctl reload
+dbus` so the new D-Bus policy is picked up). The service is D-Bus activated —
+do not enable it at boot. `just check-service` runs read-only introspection
+and a `GetServiceInfo` call against an installed service.
+
+Removal is the reverse — stop (if running), delete the same five files,
+`sudo systemctl daemon-reload`, and optionally `sudo systemctl reset-failed`
+if it ever failed during testing. No boot units, config files, or user data
+exist outside those five files, and staging directories are disposable:
 
 ```bash
-cargo fmt
-cargo clippy
-cargo test
+sudo systemctl stop fwpanel-service.service 2>/dev/null || true
+sudo rm /usr/libexec/fwpanel-service \
+        /usr/lib/systemd/system/fwpanel-service.service \
+        /usr/share/dbus-1/system-services/io.github.singh_gur.Fwpanel1.service \
+        /usr/share/dbus-1/system.d/io.github.singh_gur.Fwpanel1.conf \
+        /usr/share/polkit-1/actions/io.github.singh_gur.fwpanel.policy
+sudo systemctl daemon-reload
+sudo systemctl reset-failed 2>/dev/null || true
 ```
 
 ## Project layout
 
 ```
-src/           SvelteKit frontend (UI, routes)
-src-tauri/     Rust backend (commands, app config, capabilities)
-static/        Static assets
+src/                    SvelteKit frontend (UI, routes)
+src-tauri/              Rust GUI backend (Tauri commands, typed D-Bus client)
+crates/fwpanel-protocol/  Shared wire DTOs, reply envelope, validation
+packaging/              systemd/D-Bus/polkit assets and stage/check scripts
+static/                 Static assets copied verbatim
 ```
 
-These commands and paths describe the current scaffold. The planned Cargo
-workspace, service crates, and packaging recipes will be added during implementation.
+Cargo resolves the whole tree as one workspace from the root `Cargo.toml`.
 See [AGENTS.md](AGENTS.md) for conventions and the
 [development plan](plans/initial-development.md) for contracts and phase gates.
 

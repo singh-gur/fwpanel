@@ -1,6 +1,7 @@
-# framework-dashboard task runner
+# fwpanel task runner
 # Usage: `just` (list tasks) or `just <task>`. Requires pnpm, cargo, and system
-# deps listed in README.md ("Prerequisites").
+# deps listed in README.md ("Prerequisites"). Cargo commands run against the
+# root workspace (src-tauri, crates/fwpanel-protocol, crates/fwpanel-service).
 
 # Show available recipes.
 default:
@@ -22,21 +23,38 @@ check:
 build-ui:
     pnpm build
 
-# Build a release bundle (AppImage/rpm -> src-tauri/target/release/bundle/).
+# Build a release bundle (outputs to target/release/bundle/).
 build:
     pnpm tauri build
 
-# Format Rust code.
+# Check Rust types for the whole workspace.
+check-rust:
+    cargo check --workspace
+
+# Format Rust code (all workspace members).
 fmt:
-    cd src-tauri && cargo fmt
+    cargo fmt --all
 
-# Lint Rust code (clippy).
+# Verify Rust formatting without changing files.
+fmt-check:
+    cargo fmt --all -- --check
+
+# Lint Rust code (clippy, warnings are errors).
 clippy:
-    cd src-tauri && cargo clippy
+    cargo clippy --workspace --all-targets -- -D warnings
 
-# Run Rust tests.
+# Run Rust tests for the whole workspace.
 test:
-    cd src-tauri && cargo test
+    cargo test --workspace
 
-# All static checks: frontend types + Rust lint + Rust tests.
-check-all: check clippy test
+# Stage the host service + system assets under <destdir> (no root writes).
+# Installing them is a separate owner action; see README.md.
+stage-service destdir="stage/root":
+    packaging/stage-service.sh "{{destdir}}"
+
+# Read-only checks against the installed system service.
+check-service:
+    packaging/check-service.sh
+
+# All static checks: frontend types + Rust format/lint/tests.
+check-all: check fmt-check clippy test

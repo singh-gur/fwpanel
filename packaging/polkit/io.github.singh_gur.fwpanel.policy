@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD polkit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/software/polkit/policyconfig-1.dtd">
+<policyconfig>
+
+  <action id="io.github.singh_gur.fwpanel.read-status">
+    <description>Read Framework laptop hardware status</description>
+    <description xml:lang="en">Read Framework laptop hardware status</description>
+    <message>Authentication is required to read fwpanel hardware status</message>
+    <message xml:lang="en">Authentication is required to read fwpanel hardware status</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <!-- Active local sessions may read status without a prompt. -->
+      <allow_active>yes</allow_active>
+    </defaults>
+  </action>
+
+  <action id="io.github.singh_gur.fwpanel.set-charge-limit">
+    <description>Set the battery charge limit</description>
+    <description xml:lang="en">Set the battery charge limit</description>
+    <message>Authentication is required to change the battery charge limit</message>
+    <message xml:lang="en">Authentication is required to change the battery charge limit</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <!-- Only the explicit Apply flow may trigger this prompt; no retained
+           (_keep) authorization. -->
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+
+</policyconfig>

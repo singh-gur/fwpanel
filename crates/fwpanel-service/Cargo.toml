@@ -1,0 +1,16 @@
+[package]
+name = "fwpanel-service"
+version = "0.1.0"
+edition = "2021"
+description = "Privileged fwpanel host service: authorized Framework hardware status over the system bus"
+license = "MIT"
+
+[[bin]]
+name = "fwpanel-service"
+path = "src/main.rs"
+
+[dependencies]
+fwpanel-protocol = { path = "../fwpanel-protocol" }
+zbus = { version = "5", default-features = false, features = ["tokio"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+serde = "1.0.229"

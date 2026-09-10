@@ -1,0 +1,5 @@
+[D-BUS Service]
+Name=io.github.singh_gur.Fwpanel1
+Exec=/usr/libexec/fwpanel-service
+User=root
+SystemdService=fwpanel-service.service
