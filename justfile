@@ -77,8 +77,8 @@ flatpak-sources:
 
 # Build and install the Flatpak GUI locally (user installation, no root).
 build-flatpak:
-    flatpak-builder --user --install --force-clean stage/flatpak/build \
-        packaging/flatpak/io.github.singh-gur.fwpanel.yml
+    flatpak-builder --user --install-deps-from=flathub --install --force-clean \
+        stage/flatpak/build packaging/flatpak/io.github.singh-gur.fwpanel.yml
 
 # Read-only Flatpak checks (permissions of the installed app).
 check-flatpak:
