@@ -1,0 +1,20 @@
+[Unit]
+Description=fwpanel privileged host service (Framework hardware status)
+# Activated on demand through D-Bus; see the companion .service activation file.
+
+[Service]
+Type=dbus
+BusName=io.github.singh_gur.Fwpanel1
+ExecStart=/usr/libexec/fwpanel-service
+# Bounded restart: a failed/panicking service worker must not restart-loop.
+Restart=on-failure
+RestartSec=2s
+# NoNewPrivileges + ProtectSystem/ProtectHome/PrivateTmp: harden the root
+# service without hiding the EC device (PrivateDevices is deliberately absent).
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -10,13 +10,15 @@ Built with **Tauri 2** (Rust backend) + **SvelteKit** (TypeScript, Svelte 5)
 using `@sveltejs/adapter-static` so the frontend compiles to static assets
 embedded in the Tauri webview.
 
-The code is still the stock Tauri hello-world. The library-backed architecture
-below is approved but **not implemented**. Follow
-[plans/initial-development.md](plans/initial-development.md) for implementation
-contracts, dependencies, and owner-approved phase gates. The first supported
-target is Framework Laptop 13 AMD Ryzen AI 300 on Fedora 44 x86_64.
+The frontend is Svelte 5 runes + TypeScript (strict); the GUI is still the
+template greeting page until Phase 3. The library-backed architecture below is
+approved; the Phase 1 service boundary is implemented and hardware integration
+follows
+[plans/initial-development.md](plans/initial-development.md) with
+owner-approved phase gates. The first supported target is Framework Laptop 13
+AMD Ryzen AI 300 on Fedora 44 x86_64.
 
-## Approved architecture (not yet implemented)
+## Approved architecture
 
 ```
 Svelte component → invoke("cmd") → Tauri command → system D-Bus → fwpanel-service → framework_lib → hardware
@@ -24,6 +26,11 @@ Svelte component → invoke("cmd") → Tauri command → system D-Bus → fwpane
 
 This **replaces** the original CLI-wrapper design. Do not implement CLI
 discovery, CLI subprocesses, text-output parsing, or CLI/port-I/O fallbacks.
+
+The root `Cargo.toml` defines the workspace; `crates/fwpanel-protocol` holds
+the shared serde DTOs/reply envelope/validation and `crates/fwpanel-service`
+is the privileged host service (currently serving `GetServiceInfo` only;
+hardware methods return `unsupported_feature` until their phases).
 
 Rules for implementation:
 
@@ -35,9 +42,10 @@ Rules for implementation:
 - Tauri handlers in `src-tauri/src/lib.rs` are thin typed D-Bus clients returning
   `Result<T, String>`. Rust decodes service JSON; Svelte receives typed data and
   never parses wire messages or hardware output.
-- The planned `crates/fwpanel-protocol` shares Rust DTOs/validation;
-  `crates/fwpanel-service` owns hardware access and authorization. These crates
-  and the root Cargo workspace are Phase 1 deliverables, not existing paths.
+- `crates/fwpanel-protocol` shares Rust DTOs/validation; `crates/fwpanel-service`
+  owns hardware access and authorization. Both are workspace members of the
+  root `Cargo.toml`; use the workspace (root) lockfile only — do not create
+  per-crate lockfiles.
 - The service authorizes the actual D-Bus sender with polkit on every operation.
   Active local users may read status without a prompt; inactive/remote sessions
   are denied. Only an explicit charge-limit Apply may request administrator
@@ -56,8 +64,6 @@ Rules for implementation:
 
 ## Commands
 
-These commands describe the **current scaffold**, not the future workspace.
-Update commands and output paths when the corresponding phase actually changes them.
 `just <task>` wraps the common ones (`just --list` to see all); raw equivalents:
 
 | Task | Command |
@@ -66,28 +72,33 @@ Update commands and output paths when the corresponding phase actually changes t
 | Type check frontend | `pnpm check` |
 | Build frontend only | `pnpm build` (outputs to `build/`) |
 | Dev (full app, hot reload) | `pnpm tauri dev` |
-| Build release bundle | `pnpm tauri build` (outputs to `src-tauri/target/release/bundle/`) |
-| Check Rust only | `cargo check` (run inside `src-tauri/`) |
-| Format Rust | `cargo fmt` (inside `src-tauri/`) |
-| Lint Rust | `cargo clippy` (inside `src-tauri/`) |
+| Build release bundle | `pnpm tauri build` (outputs to `target/release/bundle/`) |
+| Check Rust (workspace) | `cargo check --workspace` (from repo root) |
+| Format Rust | `cargo fmt --all` (from repo root) |
+| Lint Rust | `cargo clippy --workspace --all-targets -- -D warnings` |
+| Rust tests | `cargo test --workspace` |
+| Stage host service | `just stage-service <destdir>` (no root writes) |
+| Check installed service | `just check-service` (read-only) |
 
-There is no frontend test runner yet. Rust tests run with `just test` or
-`cargo test` inside `src-tauri/`. Non-trivial conversion, validation, and error
-logic gets unit tests; service authorization and hardware checks follow the plan.
+There is no frontend test runner yet. Non-trivial conversion, validation, and
+error logic gets unit tests; service authorization and hardware checks follow
+the plan.
 
 ## Current layout
-
-The planned service/protocol crates and packaging assets are listed in the plan;
-do not assume they exist before their implementation phases.
 
 ```
 src/                  SvelteKit frontend (Svelte 5 runes, TypeScript)
   routes/             Pages — single-window dashboard lives here
   app.html            Shell HTML (Tauri injects into this)
-src-tauri/            Rust backend
-  src/lib.rs          All #[tauri::command]s and app wiring (main.rs only calls it)
+src-tauri/            Rust GUI backend
+  src/lib.rs          Tauri commands and app wiring (main.rs only calls it)
+  src/service.rs      Typed blocking D-Bus client for fwpanel-service
   tauri.conf.json     App config: window size, identifier io.github.singh-gur.fwpanel, build hooks
   capabilities/       Tauri permission capabilities — extend when invoking new Tauri APIs
+crates/
+  fwpanel-protocol/   Shared wire DTOs, reply envelope, validation, tests
+  fwpanel-service/    Privileged host service (D-Bus + polkit; hardware lands in Phase 2+)
+packaging/            systemd/D-Bus/polkit assets, stage-service.sh, check-service.sh
 static/               Static assets copied verbatim
 ```
 
@@ -111,9 +122,10 @@ static/               Static assets copied verbatim
 - Linux system deps for Tauri (webkit2gtk, librsvg, gcc-c++). On Fedora:
   `sudo dnf install webkit2gtk4.1-devel librsvg2-devel gcc gcc-c++`.
 - Node via nvm; Rust via rustup. Cargo binaries land in `~/.cargo/bin`.
-- `src-tauri/target/` and `node_modules/` are git-ignored; never edit anything
-  inside them. `build/` is a build artifact of `pnpm build` — do not commit
-  changes to it.
+- `target/` (workspace root) and `node_modules/` are git-ignored; never edit
+  anything inside them. `build/` is a build artifact of `pnpm build` — do not
+  commit changes to it. `stage/` (default `just stage-service` destination) is
+  git-ignored staging output.
 - After adding a Tauri plugin or API call in Rust, update
   `src-tauri/capabilities/` — missing capabilities are the usual cause of
   "command not allowed" runtime errors.

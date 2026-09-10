@@ -1,0 +1,10 @@
+[package]
+name = "fwpanel-protocol"
+version = "0.1.0"
+edition = "2021"
+description = "Shared wire DTOs, reply envelope, and validation for the fwpanel D-Bus protocol"
+license = "MIT"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

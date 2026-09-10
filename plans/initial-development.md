@@ -14,7 +14,8 @@ Ship a native GUI RPM and a Flatpak GUI, both using a separately packaged, trust
 - Mode: **Phased**; each phase produces an independently verifiable checkpoint.
 - Plan destination: `plans/initial-development.md`.
 - Approval: owner approved the draft direction in the planning conversation.
-- Implementation status: **Not Started**. No phase has been implemented or confirmed complete.
+- Implementation status: Phase 1 implemented on `feat/initial-01-service`,
+  pending owner acceptance. Later phases not started.
 
 ## Global Context
 
@@ -146,7 +147,7 @@ Initially unimplemented methods return `unsupported_feature` without accessing h
 ## Phase 1 — Service and Permission Boundary
 
 - **Objective:** establish a separately privileged, authenticated, inspectable service and typed GUI connection without hardware access.
-- **Status:** Not Started
+- **Status:** In Progress — implementation and unprivileged verification complete; awaiting fresh-context review and owner acceptance.
 - **Complexity:** High
 - **Estimated Time:** 90–150 minutes
 - **Prerequisites:** approved plan; owner approval before any system installation.
@@ -169,17 +170,17 @@ Initially unimplemented methods return `unsupported_feature` without accessing h
 
 ### Implementation Tasks
 
-- [ ] Create a Cargo workspace with resolver 2 and explicit member paths. Carry the existing release optimization settings into the workspace root, because member profiles are ignored. Generate the root lockfile with Cargo, preserve existing resolutions where compatible, and remove the now-unused child lockfile only once workspace checks succeed.
-- [ ] Add dependencies using Cargo commands; keep `framework_lib` confined to the service crate when added in Phase 2. The protocol crate uses serde/serde_json only. Use zbus's Tokio integration in the service; keep client blocking work off Tauri's GUI thread.
-- [ ] Implement the approved protocol, including round-trip tests, malformed/oversized/incompatible reply rejection, and integer charge-limit validation. Do not introduce a general schema/type-generation system.
-- [ ] Implement all named D-Bus methods. Only `GetServiceInfo` returns real data in this phase; the remaining methods authorize as appropriate but return `unsupported_feature` before hardware access or write authentication. Advertise no hardware features yet.
-- [ ] Implement polkit checks using the message's real sender and the specified action defaults. Validate authorization result shape and deny on any error. Keep policy test seams private; no production flag or installed fake backend may bypass authorization.
-- [ ] Implement `get_service_info() -> Result<ServiceInfo, String>` and map absent service, denied access, invalid reply, and version mismatch to clear errors. Keep the existing greeting UI until Phase 3; register the new command through the existing Tauri wiring.
-- [ ] Installable service paths are `/usr/libexec/fwpanel-service`, `/usr/lib/systemd/system/fwpanel-service.service`, `/usr/share/dbus-1/system-services/io.github.singh_gur.Fwpanel1.service`, `/usr/share/dbus-1/system.d/io.github.singh_gur.Fwpanel1.conf`, and `/usr/share/polkit-1/actions/io.github.singh_gur.fwpanel.policy`. Use root-owned, non-user-writable installed files; never execute the service as root directly from the checkout.
-- [ ] Add `Type=dbus` and the approved bus name to the systemd unit; use D-Bus activation rather than enabling a polling daemon at boot. Start with `NoNewPrivileges=yes`, `ProtectSystem=strict`, `ProtectHome=yes`, and `PrivateTmp=yes`; do not use `PrivateDevices=yes`, which would hide the required EC device. Additional restrictions require hardware verification and must not break the approved driver silently.
-- [ ] Add `just stage-service <destdir>` to build and stage the executable/policies under a caller-owned directory, without escalation or writes to system paths. Document the exact file installation/removal procedure for an owner-operated administrator session. Service installation remains a separate, explicit owner action.
-- [ ] Add `just check-service` for read-only D-Bus introspection/service-info checks. Verify policy defaults and sender handling with small Rust tests plus real denied-access checks where an inactive/remote test session is available; do not manufacture successful evidence when it is not.
-- [ ] Update existing docs to describe the new architecture, Node 24/pnpm baseline, no CLI requirement, separate privilege boundary, and workspace build paths. Ignore root `target/`, packaging staging/build outputs, and Rust/Flatpak artifacts. Update Vite's ignored paths for new Rust crates. Do not mark later features implemented.
+- [x] Create a Cargo workspace with resolver 2 and explicit member paths. Carry the existing release optimization settings into the workspace root, because member profiles are ignored. Generate the root lockfile with Cargo, preserve existing resolutions where compatible, and remove the now-unused child lockfile only once workspace checks succeed. (Child `src-tauri/Cargo.lock` retired after `cargo check/test/clippy` passed.)
+- [x] Add dependencies using Cargo commands; keep `framework_lib` confined to the service crate when added in Phase 2. The protocol crate uses serde/serde_json only. Use zbus's Tokio integration in the service; keep client blocking work off Tauri's GUI thread. (Service: zbus 5 with `tokio` feature, no defaults. GUI: zbus 5 defaults incl. `blocking-api`; blocking calls wrapped in `tauri::async_runtime::spawn_blocking`.)
+- [x] Implement the approved protocol, including round-trip tests, malformed/oversized/incompatible reply rejection, and integer charge-limit validation. Do not introduce a general schema/type-generation system. (12 tests in `fwpanel-protocol`.)
+- [x] Implement all named D-Bus methods. Only `GetServiceInfo` returns real data in this phase; the remaining methods authorize as appropriate but return `unsupported_feature` before hardware access or write authentication. Advertise no hardware features yet. (`ServiceInfo.features` is empty; pinned by a unit test.)
+- [x] Implement polkit checks using the message's real sender and the specified action defaults. Validate authorization result shape and deny on any error. Keep policy test seams private; no production flag or installed fake backend may bypass authorization. (All `Err(_) => false` fail-closed; unit tests pin action ids and the `(sa{sv})` subject signature.)
+- [x] Implement `get_service_info() -> Result<ServiceInfo, String>` and map absent service, denied access, invalid reply, and version mismatch to clear errors. Keep the existing greeting UI until Phase 3; register the new command through the existing Tauri wiring.
+- [x] Installable service paths are `/usr/libexec/fwpanel-service`, `/usr/lib/systemd/system/fwpanel-service.service`, `/usr/share/dbus-1/system-services/io.github.singh_gur.Fwpanel1.service`, `/usr/share/dbus-1/system.d/io.github.singh_gur.Fwpanel1.conf`, and `/usr/share/polkit-1/actions/io.github.singh_gur.fwpanel.policy`. Use root-owned, non-user-writable installed files; never execute the service as root directly from the checkout. (Paths wired in `packaging/stage-service.sh`; staged 0755/0644. Nothing installed.)
+- [x] Add `Type=dbus` and the approved bus name to the systemd unit; use D-Bus activation rather than enabling a polling daemon at boot. Start with `NoNewPrivileges=yes`, `ProtectSystem=strict`, `ProtectHome=yes`, and `PrivateTmp=yes`; do not use `PrivateDevices=yes`, which would hide the required EC device. Additional restrictions require hardware verification and must not break the approved driver silently. (Unit is not enabled; `WantedBy` present for optional enablement only.)
+- [x] Add `just stage-service <destdir>` to build and stage the executable/policies under a caller-owned directory, without escalation or writes to system paths. Document the exact file installation/removal procedure for an owner-operated administrator session. Service installation remains a separate, explicit owner action. (Verified: staged to `/tmp/fwpanel-stage` with correct modes.)
+- [x] Add `just check-service` for read-only D-Bus introspection/service-info checks. Verify policy defaults and sender handling with small Rust tests plus real denied-access checks where an inactive/remote test session is available; do not manufacture successful evidence when it is not. (Script added; Rust tests cover action ids/subject shape. Installed-service denial checks **Not Run** — service not installed.)
+- [x] Update existing docs to describe the new architecture, Node 24/pnpm baseline, no CLI requirement, separate privilege boundary, and workspace build paths. Ignore root `target/`, packaging staging/build outputs, and Rust/Flatpak artifacts. Update Vite's ignored paths for new Rust crates. Do not mark later features implemented.
 
 ### Execution Tracking Rules
 
@@ -187,12 +188,12 @@ Apply the global tracking rules. Record staged/installed paths and whether an ow
 
 ### Verification
 
-- [ ] `cargo fmt --all -- --check`, `cargo check --workspace`, `cargo test --workspace`, and `cargo clippy --workspace --all-targets -- -D warnings` succeed.
-- [ ] `pnpm check` and `pnpm build` succeed with no change to the SvelteKit static/SSR decisions.
-- [ ] `systemd-analyze verify packaging/systemd/fwpanel-service.service` succeeds after the referenced executable is staged/installed appropriately; record any path-only staging limitation rather than suppressing errors.
-- [ ] After owner installation: `busctl --system introspect io.github.singh_gur.Fwpanel1 /io/github/singh_gur/Fwpanel1` lists only the intended application methods plus standard D-Bus interfaces.
-- [ ] `busctl --system call io.github.singh_gur.Fwpanel1 /io/github/singh_gur/Fwpanel1 io.github.singh_gur.Fwpanel1 GetServiceInfo` returns protocol-1 service information to the active desktop user without a prompt.
-- [ ] Read-access denial and polkit-unavailable conditions do not reach a hardware function. All unimplemented methods return explicit unavailable/unsupported results.
+- [x] `cargo fmt --all -- --check`, `cargo check --workspace`, `cargo test --workspace`, and `cargo clippy --workspace --all-targets -- -D warnings` succeed. (2026-09-10; 17 tests pass.)
+- [x] `pnpm check` and `pnpm build` succeed with no change to the SvelteKit static/SSR decisions. (0 errors/warnings.)
+- [x] `systemd-analyze verify packaging/systemd/fwpanel-service.service` succeeds after the referenced executable is staged/installed appropriately; record any path-only staging limitation rather than suppressing errors. (Live verify reports only the missing `/usr/libexec/fwpanel-service` — expected pre-install. With `--root=/tmp/fwpanel-stage` the unit parses; remaining complaint is the minimal sysroot lacking system-provided `dbus.socket`, not this unit. Staged smoke run: unprivileged binary reaches the system bus and is correctly refused the root-only bus name.)
+- [ ] After owner installation: `busctl --system introspect io.github.singh_gur.Fwpanel1 /io/github/singh_gur/Fwpanel1` lists only the intended application methods plus standard D-Bus interfaces. **Not Run — service not installed.**
+- [ ] `busctl --system call io.github.singh_gur.Fwpanel1 /io/github/singh_gur/Fwpanel1 io.github.singh_gur.Fwpanel1 GetServiceInfo` returns protocol-1 service information to the active desktop user without a prompt. **Not Run — service not installed.**
+- [ ] Read-access denial and polkit-unavailable conditions do not reach a hardware function. All unimplemented methods return explicit unavailable/unsupported results. (Unit-test level: unimplemented methods authorize first, then return `unsupported_feature`; no hardware functions exist yet. Live denial checks **Not Run — service not installed**.)
 
 ### Completion Gate
 
@@ -551,3 +552,18 @@ None blocking the approved plan. System installation, reversible hardware writes
 - Tauri Flatpak guidance: https://v2.tauri.app/distribute/flatpak/ (verify current runtime/tooling; do not copy outdated example versions).
 - Flatpak permissions: https://docs.flatpak.org/en/latest/sandbox-permissions.html
 - Upstream offline node/pnpm source generator: https://github.com/flatpak/flatpak-builder-tools/tree/master/node
+
+### Execution Tracking (2026-09-10)
+
+- Staged to `/tmp/fwpanel-stage` (modes 0755/0644) for verification only.
+- Owner has **not** installed the service; all installed-service checks are Not Run.
+
+## Progress
+
+- [ ] Phase 1 — Service and Permission Boundary — implementation complete on `feat/initial-01-service`; unprivileged verification passed (fmt/check/test/clippy, pnpm check/build, systemd-analyze with recorded limitation, staged smoke run denied bus name as designed) 2026-09-10; post-install busctl checks Not Run; executor: root (zai/glm-5.3, session default); research: root-owned doc verification (researcher child lacked web tools — infrastructure limitation, run ebde277e ended without artifacts); run: n/a (root-built)
+- [ ] Phase 2 — Live Battery and Charge-Limit Reads
+- [ ] Phase 3 — Usable Dashboard
+- [ ] Phase 4 — Authenticated Charge-Limit Control
+- [ ] Phase 5 — USB-C and Input-Deck Status
+- [ ] Phase 6 — Fedora RPM Packaging
+- [ ] Phase 7 — Flatpak GUI Delivery
