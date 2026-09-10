@@ -14,11 +14,11 @@ Built with:
 - [SvelteKit 2](https://kit.svelte.dev) + Svelte 5 + TypeScript — UI
 - pnpm — package manager
 
-> Status: Phase 1 of the [development plan](plans/initial-development.md) is
-> implemented — Cargo workspace, shared protocol crate, privileged host service
-> skeleton with polkit authorization, and packaging assets (pending owner
-> acceptance). The UI is still the template; hardware features and packaging
-> land in later phases.
+> Status: Phases 1–2 implemented — service/permission boundary plus live
+> battery/AC and charge-limit READS through the pinned `framework_lib` 0.6.5
+> (owner-accepted Phase 1; Phase 2 pending live verification). The UI is still
+> the template; charge-limit control, ports/deck status, and packaging land in
+> later phases.
 
 ## Approved architecture (service boundary implemented)
 

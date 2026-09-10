@@ -16,5 +16,9 @@ echo "== GetServiceInfo (active local session: no prompt expected) =="
 busctl --system call "$NAME" "$PATH_OBJ" "$IFACE" GetServiceInfo
 
 echo
+echo "== GetPower (read-only battery/AC/charge-limit status) =="
+busctl --system call "$NAME" "$PATH_OBJ" "$IFACE" GetPower
+
+echo
 echo "== systemd unit state =="
 systemctl status fwpanel-service.service --no-pager || true

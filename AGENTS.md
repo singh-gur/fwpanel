@@ -11,11 +11,13 @@ using `@sveltejs/adapter-static` so the frontend compiles to static assets
 embedded in the Tauri webview.
 
 The frontend is Svelte 5 runes + TypeScript (strict); the GUI is still the
-template greeting page until Phase 3. The library-backed architecture below is
-approved; the Phase 1 service boundary is implemented and hardware integration
-follows
-[plans/initial-development.md](plans/initial-development.md) with
-owner-approved phase gates. The first supported target is Framework Laptop 13
+template greeting page until Phase 3. `crates/fwpanel-service` serves
+`GetServiceInfo` and `GetPower` (battery/AC plus charge-limit reads through
+`framework_lib =0.6.5`, kernel cros_ec driver only, supported only on
+Framework Laptop 13 AMD Ryzen AI 300); ports/deck/write return
+`unsupported_feature` until their phases. Follow
+[plans/initial-development.md](plans/initial-development.md) for contracts and
+owner-approved phase gates. First supported target: Framework Laptop 13
 AMD Ryzen AI 300 on Fedora 44 x86_64.
 
 ## Approved architecture
@@ -53,9 +55,12 @@ Rules for implementation:
 - Expose only the plan's named status and charge-limit methods, not arbitrary
   commands, paths, or EC requests. Validate writes in the service, preserve the
   existing minimum, verify readback, and never automatically retry a mutation.
-- Keep blocking hardware work off UI/async executor threads, serialize it, and
-  follow the plan's timeout/recovery rules. A timed-out future does not cancel
-  a blocking hardware call. Do not present failures as valid zero/absent readings.
+- Keep blocking hardware work off UI/async executor threads, serialize it
+  (single non-queuing gate in `crates/fwpanel-service/src/hardware.rs`), and
+  follow the plan's timeout/recovery rules: a timed-out or panicking hardware
+  worker terminates the service process (systemd restarts it); a timed-out
+  future does not cancel a blocking hardware call. Do not present failures as
+  valid zero/absent readings.
 - No `sudo` invocations, privileged GUI, or user-selected helper executable.
   System installation and real hardware-write tests need separate owner approval.
 - Deliver GUI RPM + Flatpak with a separately packaged host-service RPM.
@@ -97,7 +102,8 @@ src-tauri/            Rust GUI backend
   capabilities/       Tauri permission capabilities — extend when invoking new Tauri APIs
 crates/
   fwpanel-protocol/   Shared wire DTOs, reply envelope, validation, tests
-  fwpanel-service/    Privileged host service (D-Bus + polkit; hardware lands in Phase 2+)
+  fwpanel-service/    Privileged host service: D-Bus + polkit + hardware gate
+                      (battery/charge-limit reads live; ports/deck/write later)
 packaging/            systemd/D-Bus/polkit assets, stage-service.sh, check-service.sh
 static/               Static assets copied verbatim
 ```
