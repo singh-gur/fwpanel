@@ -48,7 +48,8 @@ modules:
         # pnpm must not try to reach the network or fetch node headers.
         npm_config_offline: "true"
     build-commands:
-      - pnpm install --offline --frozen-lockfile
+      - tar xzf pnpm.tgz package/bin/pnpm.mjs
+      - node package/bin/pnpm.mjs install --offline --frozen-lockfile
       - pnpm build
       - cargo build --offline --release --manifest-path src-tauri/Cargo.toml -p fwpanel
       - install -Dm755 target/release/fwpanel /app/bin/fwpanel
@@ -101,6 +102,12 @@ modules:
         path: ../../Cargo.lock
       - type: dir
         path: ../../crates
+      # Pinned pnpm executable: the node24 SDK extension ships node/npm but
+      # not pnpm; the plan requires pnpm as a provisioned build input.
+      - type: file
+        url: https://registry.npmjs.org/pnpm/-/pnpm-12.3.4.tgz
+        sha512: 961aa41fb077da3a04a441d9f8e15ebc0c96da8ef710b2eb67bf9ee7cb0610eabd48f1fd85f51cffe73846785fa0f87c56a3a872a1d893f8446741b5cce45457
+        dest-filename: pnpm.tgz
       # Pinned offline dependency sources (generated; see generate-sources.sh).
       # node-sources.json also wires the pnpm store and SDK node headers.
       - node-sources.json
