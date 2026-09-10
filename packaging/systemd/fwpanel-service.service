@@ -1,6 +1,9 @@
 [Unit]
 Description=fwpanel privileged host service (Framework hardware status)
 # Activated on demand through D-Bus; see the companion .service activation file.
+# Bounded restart: no more than three starts in 60 seconds.
+StartLimitIntervalSec=60
+StartLimitBurst=3
 
 [Service]
 Type=dbus

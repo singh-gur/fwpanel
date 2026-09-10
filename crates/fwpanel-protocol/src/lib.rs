@@ -157,7 +157,18 @@ impl<T: DeserializeOwned> Reply<T> {
                 }
                 Ok(data)
             }
-            Reply::Error { code, message, .. } => Err(ReplyError::Service { code, message }),
+            Reply::Error {
+                protocol_version,
+                code,
+                message,
+            } => {
+                if protocol_version != PROTOCOL_MAJOR {
+                    return Err(ReplyError::Incompatible {
+                        reply_protocol: protocol_version,
+                    });
+                }
+                Err(ReplyError::Service { code, message })
+            }
         }
     }
 }
@@ -498,6 +509,15 @@ mod tests {
             "protocol_version":1,"library_version":"y","features":[],"future_field":true}}"#
             .replace('\n', "");
         assert!(Reply::<ServiceInfo>::decode(&json).is_ok());
+    }
+
+    #[test]
+    fn error_reply_with_wrong_protocol_version_is_incompatible() {
+        let json = r#"{"status":"error","protocol_version":2,"code":"busy","message":"x"}"#;
+        assert_eq!(
+            Reply::<ServiceInfo>::decode(json),
+            Err(ReplyError::Incompatible { reply_protocol: 2 })
+        );
     }
 
     #[test]
