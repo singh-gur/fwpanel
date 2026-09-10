@@ -10,12 +10,14 @@ Built with **Tauri 2** (Rust backend) + **SvelteKit** (TypeScript, Svelte 5)
 using `@sveltejs/adapter-static` so the frontend compiles to static assets
 embedded in the Tauri webview.
 
-The frontend is Svelte 5 runes + TypeScript (strict); the GUI is still the
-template greeting page until Phase 3. `crates/fwpanel-service` serves
-`GetServiceInfo` and `GetPower` (battery/AC plus charge-limit reads through
-`framework_lib =0.6.5`, kernel cros_ec driver only, supported only on
-Framework Laptop 13 AMD Ryzen AI 300); ports/deck/write return
-`unsupported_feature` until their phases. Follow
+The frontend is Svelte 5 runes + TypeScript (strict): the dashboard
+(`src/routes/+page.svelte`) polls `get_service_info`/`get_power` sequentially
+(refresh on show, 5s after each finished refresh, paused while hidden,
+manual Retry joins the in-flight refresh) and keeps typed DTO mirrors in
+`src/lib/types.ts`. `crates/fwpanel-service` serves `GetServiceInfo` and
+`GetPower` (battery/AC plus charge-limit reads through `framework_lib =0.6.5`,
+kernel cros_ec driver only, supported only on Framework Laptop 13 AMD Ryzen AI
+300); ports/deck/write return `unsupported_feature` until their phases. Follow
 [plans/initial-development.md](plans/initial-development.md) for contracts and
 owner-approved phase gates. First supported target: Framework Laptop 13
 AMD Ryzen AI 300 on Fedora 44 x86_64.
@@ -93,7 +95,8 @@ the plan.
 
 ```
 src/                  SvelteKit frontend (Svelte 5 runes, TypeScript)
-  routes/             Pages — single-window dashboard lives here
+  routes/+page.svelte Dashboard: refresh coordinator, service/battery/limit cards
+  lib/types.ts        Strict TS mirrors of the protocol DTOs (keep in sync)
   app.html            Shell HTML (Tauri injects into this)
 src-tauri/            Rust GUI backend
   src/lib.rs          Tauri commands and app wiring (main.rs only calls it)

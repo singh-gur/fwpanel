@@ -14,11 +14,10 @@ Built with:
 - [SvelteKit 2](https://kit.svelte.dev) + Svelte 5 + TypeScript — UI
 - pnpm — package manager
 
-> Status: Phases 1–2 implemented — service/permission boundary plus live
-> battery/AC and charge-limit READS through the pinned `framework_lib` 0.6.5
-> (owner-accepted Phase 1; Phase 2 pending live verification). The UI is still
-> the template; charge-limit control, ports/deck status, and packaging land in
-> later phases.
+> Status: Phases 1–3 implemented — service/permission boundary, live
+> battery/AC/charge-limit reads, and the dashboard UI replacing the template
+> (Phases 1–2 owner-accepted; Phase 3 pending review/acceptance). Charge-limit
+> control, ports/deck status, and packaging land in later phases.
 
 ## Approved architecture (service boundary implemented)
 
@@ -56,7 +55,7 @@ Other distros: see [Tauri's Linux prerequisites](https://tauri.app/start/prerequ
 
 The `framework_tool` CLI is not required and never invoked. Hardware features
 need the separately installed `fwpanel-service` (see below); until it is
-installed, the GUI reports the service as unavailable.
+installed, the dashboard shows an install hint and offers Retry.
 
 ## Development
 

@@ -8,9 +8,33 @@
 
 use std::time::Duration;
 
-use fwpanel_protocol::{PowerSnapshot, Reply, ServiceInfo};
+use fwpanel_protocol::{ErrorCode, PowerSnapshot, Reply, ReplyError, ServiceInfo};
 use zbus::blocking::Connection;
 use zbus::proxy;
+
+/// Stable error prefixes so the UI can classify failures without parsing
+/// free-form transport messages. Keep in sync with `classify()` in the UI.
+mod tag {
+    pub const UNAVAILABLE: &str = "service-unavailable";
+    pub const DENIED: &str = "service-denied";
+    pub const INCOMPATIBLE: &str = "service-incompatible";
+    pub const INVALID_REPLY: &str = "service-invalid-reply";
+    pub const FAILED: &str = "service-failed";
+}
+
+fn tag_transport(detail: String) -> String {
+    format!("{}: {detail}", tag::UNAVAILABLE)
+}
+
+fn tag_reply_error(error: ReplyError) -> String {
+    let tag = match &error {
+        ReplyError::Incompatible { .. } => tag::INCOMPATIBLE,
+        ReplyError::Oversized | ReplyError::Malformed(_) => tag::INVALID_REPLY,
+        ReplyError::Service { code, .. } if *code == ErrorCode::AccessDenied => tag::DENIED,
+        ReplyError::Service { .. } => tag::FAILED,
+    };
+    format!("{tag}: {error}")
+}
 
 /// Client read deadline: generous for the serialized service, short enough
 /// that the UI never hangs on a dead one.
@@ -29,14 +53,14 @@ trait Fwpanel1 {
 /// Fetch the service description. Errors mention the absent service rather
 /// than raw transport details.
 pub fn get_service_info() -> Result<ServiceInfo, String> {
-    let json = call("GetServiceInfo", |proxy| proxy.get_service_info())?;
-    Reply::decode(&json).map_err(|e| e.to_string())
+    let json = call("GetServiceInfo", |proxy| proxy.get_service_info()).map_err(tag_transport)?;
+    Reply::decode(&json).map_err(tag_reply_error)
 }
 
 /// Fetch battery/AC status plus the current charge limit.
 pub fn get_power() -> Result<PowerSnapshot, String> {
-    let json = call("GetPower", |proxy| proxy.get_power())?;
-    Reply::decode(&json).map_err(|e| e.to_string())
+    let json = call("GetPower", |proxy| proxy.get_power()).map_err(tag_transport)?;
+    Reply::decode(&json).map_err(tag_reply_error)
 }
 
 fn connection() -> Result<Connection, String> {
@@ -54,7 +78,5 @@ fn call(
     let connection = connection()?;
     let proxy = Fwpanel1ProxyBlocking::new(&connection)
         .map_err(|e| format!("fwpanel service proxy failed: {e}"))?;
-    invoke(&proxy).map_err(|e| {
-        format!("fwpanel service is unavailable for {method} (is fwpanel-service installed?): {e}")
-    })
+    invoke(&proxy).map_err(|e| format!("{method}: {e}"))
 }
