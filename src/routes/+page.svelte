@@ -57,7 +57,7 @@
       } catch (e) {
         if (disposed) return;
         serviceState = classify(String(e));
-        powerError = "fwpanel service unreachable — data not refreshed.";
+        powerError = "fwpanel service problem — data not refreshed.";
         return;
       }
       try {
