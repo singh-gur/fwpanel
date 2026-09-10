@@ -255,7 +255,7 @@ Verified read-only integration, safe data conversion, service recovery behavior,
 ## Phase 3 — Usable Dashboard
 
 - **Objective:** replace the template with a responsive battery dashboard and clear service/error states.
-- **Status:** Not Started
+- **Status:** Complete pending owner acceptance (2026-09-10).
 - **Complexity:** Medium
 - **Estimated Time:** 60–90 minutes
 - **Prerequisites:** Phase 2 accepted.
@@ -565,7 +565,7 @@ None blocking the approved plan. System installation, reversible hardware writes
 - [x] Phase 1 — Service and Permission Boundary — owner-accepted 2026-09-10; implemented on `feat/initial-01-service` (6f049b3, fixes 2dab858 + ff469ad, docs bd03ebc/7f7f7ea/d6f6b98), merged to main; verification: fmt/check/test/clippy + pnpm check/build, 18 tests, systemd-analyze (limitations recorded), staged smoke run, installed-service busctl introspection (5 methods only) + GetServiceInfo protocol-1 no-prompt + unsupported_feature paths no-prompt + polkit defaults verified live; live read-denial Not Run (no inactive/remote session available); review rounds 1–2 (2 blockers fixed, round-2 PASS); executor: root (zai/glm-5.3, session default); research: root-owned (researcher child lacked web tools); run: n/a (root-built)
 - [x] Phase 2 — Live Battery and Charge-Limit Reads — owner-accepted 2026-09-10; (23c12b7); review: GATE PASS, no blockers (reviewer zai/glm-5.3/high, run 5e30a80b); live verification 2026-09-10: GetPower on target (on-battery + AC states plausible, percentage internally consistent, limits 0/100, prompts never shown); executor: root (zai/glm-5.3, session default)
 - [ ] Phase 2 — Live Battery and Charge-Limit Reads
-- [ ] Phase 3 — Usable Dashboard
+- [ ] Phase 3 — Usable Dashboard — implementation complete on `feat/initial-03-dashboard` (adca37d, fixes c39487a/f72f2aa); review round 1 FAIL (2 blockers: pending read shown as no-battery, service loss hid stale data) → fixed → round 2 PASS (runs 2a53edf0, e20d4258); pnpm check/build, workspace cargo, dev smoke, release-binary smoke all green; owner manual desktop checklist pending; executor: root (zai/glm-5.3, session default)
 - [ ] Phase 4 — Authenticated Charge-Limit Control
 - [ ] Phase 5 — USB-C and Input-Deck Status
 - [ ] Phase 6 — Fedora RPM Packaging
