@@ -5,11 +5,11 @@
 //! D-Bus sender through polkit before doing anything else; application-level
 //! outcomes (including denials and unimplemented features) are returned in the
 //! JSON reply envelope, so clients get typed errors instead of transport
-//! errors. Phase 1 serves `GetServiceInfo` only; the hardware-backed methods
-//! return `unsupported_feature` before touching hardware or write
-//! authentication.
+//! errors. `GetServiceInfo` and `GetPower` are live; ports, input deck, and
+//! the charge-limit write return `unsupported_feature` until their phases.
 
 mod auth;
+mod hardware;
 
 use fwpanel_protocol::{ErrorCode, Reply, ServiceInfo, PROTOCOL_MAJOR};
 use zbus::message::Header;
@@ -17,12 +17,13 @@ use zbus::message::Header;
 const BUS_NAME: &str = "io.github.singh_gur.Fwpanel1";
 const OBJECT_PATH: &str = "/io/github/singh_gur/Fwpanel1";
 
-/// `framework_lib` release this service is pinned against. Phase 2 adds the
-/// actual dependency; until then this documents the pinned target.
+/// `framework_lib` release this service is pinned against. Keep in sync with
+/// the `=0.6.5` pin in `Cargo.toml`.
 const LIBRARY_VERSION: &str = "0.6.5";
 
 struct Fwpanel1 {
     polkit: auth::Polkit,
+    hardware: hardware::HardwareAccess,
 }
 
 #[zbus::interface(name = "io.github.singh_gur.Fwpanel1")]
@@ -38,7 +39,13 @@ impl Fwpanel1 {
     }
 
     async fn get_power(&self, #[zbus(header)] header: Header<'_>) -> zbus::fdo::Result<String> {
-        self.unimplemented(&header).await
+        if let Err(reply) = self.require_read_access(&header).await {
+            return Ok(reply);
+        }
+        match self.hardware.power().await {
+            Ok(snapshot) => ok_json(&snapshot),
+            Err(e) => Ok(error_json(e.code, &e.message)),
+        }
     }
 
     async fn get_ports(&self, #[zbus(header)] header: Header<'_>) -> zbus::fdo::Result<String> {
@@ -102,9 +109,9 @@ fn service_info() -> ServiceInfo {
         service_version: env!("CARGO_PKG_VERSION").to_string(),
         protocol_version: PROTOCOL_MAJOR,
         library_version: LIBRARY_VERSION.to_string(),
-        // No hardware feature is advertised until its implementation lands
-        // and is verified (battery/charge-limit reads in Phase 2).
-        features: Vec::new(),
+        // Advertised only once implemented and verified: battery and
+        // charge-limit reads (Phase 2). Writes/ports/deck stay unimplemented.
+        features: hardware::implemented_features(),
     }
 }
 
@@ -121,7 +128,8 @@ fn error_json(code: ErrorCode, message: &str) -> String {
 #[tokio::main]
 async fn main() -> zbus::Result<()> {
     let polkit = auth::Polkit::connect().await?;
-    let service = Fwpanel1 { polkit };
+    let hardware = hardware::HardwareAccess::detect();
+    let service = Fwpanel1 { polkit, hardware };
     let _connection = zbus::connection::Builder::system()?
         .name(BUS_NAME)?
         .serve_at(OBJECT_PATH, service)?
@@ -137,11 +145,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn service_info_advertises_no_hardware_features_in_phase_1() {
+    fn service_info_advertises_power_reads_only() {
         let info = service_info();
         assert_eq!(info.protocol_version, PROTOCOL_MAJOR);
-        assert!(info.features.is_empty());
         assert_eq!(info.library_version, LIBRARY_VERSION);
+        assert_eq!(info.features, hardware::implemented_features());
+        assert!(!info.features.iter().any(|f| f == "charge_limit_write"));
     }
 
     #[test]

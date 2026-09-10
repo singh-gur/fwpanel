@@ -1,7 +1,7 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 mod service;
 
-use fwpanel_protocol::ServiceInfo;
+use fwpanel_protocol::{PowerSnapshot, ServiceInfo};
 
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -16,11 +16,18 @@ async fn get_service_info() -> Result<ServiceInfo, String> {
         .map_err(|e| format!("service call task failed: {e}"))?
 }
 
+#[tauri::command]
+async fn get_power() -> Result<PowerSnapshot, String> {
+    tauri::async_runtime::spawn_blocking(service::get_power)
+        .await
+        .map_err(|e| format!("service call task failed: {e}"))?
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet, get_service_info])
+        .invoke_handler(tauri::generate_handler![greet, get_service_info, get_power])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
