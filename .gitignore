@@ -13,3 +13,5 @@ vite.config.ts.timestamp-*
 /target
 # Local staging directory used by `just stage-service`
 /stage
+# rpmbuild workspace for `just build-service-rpm`
+/stage/rpm

@@ -52,6 +52,21 @@ test:
 stage-service destdir="stage/root":
     packaging/stage-service.sh "{{destdir}}"
 
+# Build the host-service RPM from the workspace release output (no escalation).
+build-service-rpm:
+    #!/bin/sh
+    set -e
+    cargo build --release -p fwpanel-service
+    rpmbuild -bb \
+      --define "_topdir $PWD/stage/rpm" \
+      --define "fwpanel_bin $PWD/target/release/fwpanel-service" \
+      --define "fwpanel_repo $PWD" \
+      packaging/rpm/fwpanel-service.spec
+
+# Build the GUI RPM (Tauri bundler; requires the service RPM capability).
+build-rpm: build-service-rpm
+    pnpm tauri build
+
 # Read-only checks against the installed system service.
 check-service:
     packaging/check-service.sh

@@ -93,6 +93,8 @@ Rules for implementation:
 | Rust tests | `cargo test --workspace` |
 | Stage host service | `just stage-service <destdir>` (no root writes) |
 | Check installed service | `just check-service` (read-only) |
+| Build service RPM | `just build-service-rpm` → `stage/rpm/RPMS/x86_64/` |
+| Build both RPMs | `just build-rpm` → service + `target/release/bundle/rpm/` |
 
 There is no frontend test runner yet. Non-trivial conversion, validation, and
 error logic gets unit tests; service authorization and hardware checks follow

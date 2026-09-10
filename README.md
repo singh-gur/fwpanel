@@ -14,10 +14,11 @@ Built with:
 - [SvelteKit 2](https://kit.svelte.dev) + Svelte 5 + TypeScript — UI
 - pnpm — package manager
 
-> Status: Phases 1–5 implemented — service/permission boundary, live
+> Status: Phases 1–6 implemented — service/permission boundary, live
 > battery/AC/charge-limit reads, the dashboard, the authenticated charge-limit
-> control, and USB-C power + input-deck status (Phases 1–4 owner-accepted;
-> Phase 5 pending review/acceptance). Packaging lands in Phases 6–7.
+> control, USB-C power + input-deck status, and Fedora RPM packaging for the
+> service and GUI (Phases 1–5 owner-accepted; Phase 6 pending
+> review/acceptance). Flatpak lands in Phase 7.
 
 ## Approved architecture (service boundary implemented)
 
@@ -80,6 +81,11 @@ cover the whole workspace: `src-tauri` plus `crates/fwpanel-protocol` and
 `crates/fwpanel-service`.
 
 ## Host service staging and installation
+
+> Preferred installation: the RPMs from Phase 6 (`just build-rpm` produces
+> `fwpanel-service` and the GUI package; the GUI requires the service via the
+> `fwpanel-service-api-1` capability whose name carries the protocol major).
+> Manual staging below remains available for development testing.
 
 `just stage-service <destdir>` builds the service and stages the executable
 plus its system assets under a caller-owned directory. It performs **no**
