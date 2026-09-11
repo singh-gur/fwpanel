@@ -1,0 +1,368 @@
+/* fwpanel design system — tokens, base element styles, shared primitives.
+   Loaded once from src/routes/+layout.svelte.
+
+   Note on CSP: the production policy is `style-src 'self'`, so inline style
+   attributes are blocked. Anything data-driven (gauges, bars, markers) must be
+   expressed with SVG presentation attributes, never an inline style. */
+
+:root {
+  color-scheme: light dark;
+
+  /* Typography */
+  --font-sans:
+    "Inter", "Cantarell", "Segoe UI", system-ui, -apple-system, "Helvetica Neue",
+    Arial, sans-serif;
+  --font-size: 14px;
+
+  /* Spacing */
+  --sp-1: 0.25rem;
+  --sp-2: 0.5rem;
+  --sp-3: 0.75rem;
+  --sp-4: 1rem;
+  --sp-5: 1.25rem;
+  --sp-6: 1.5rem;
+  --sp-8: 2rem;
+
+  /* Radii */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-full: 999px;
+
+  /* Motion */
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --dur: 180ms;
+
+  /* Light palette */
+  --bg: #eef0f4;
+  --bg-accent: #e6e9f0;
+  --surface: #ffffff;
+  --surface-2: #f6f7fa;
+  --surface-3: #eceef3;
+  --border: #e0e3ea;
+  --border-strong: #ccd1db;
+  --text: #12151a;
+  --text-muted: #59616e;
+  --text-faint: #6b7280;
+
+  --accent: #bd4614;
+  --accent-hover: #a53c11;
+  --accent-press: #8d330d;
+  --accent-ink: #ffffff;
+  --accent-soft: #fbeee7;
+  --accent-line: #edc8b3;
+
+  --ok: #0d7a4e;
+  --ok-soft: #e4f4ec;
+  --ok-line: #bfe3d1;
+  --warn: #9c5c00;
+  --warn-soft: #fbf0dd;
+  --warn-line: #eed6ab;
+  --danger: #bf3225;
+  --danger-soft: #fceceb;
+  --danger-line: #f2c8c4;
+  --info: #2a5bd7;
+  --info-soft: #e9eefc;
+  --info-line: #c7d5f7;
+  --idle: #7b8494;
+  --idle-soft: #eff1f5;
+  --idle-line: #dcdfe7;
+
+  --shadow-sm: 0 1px 2px rgba(15, 20, 30, 0.06);
+  --shadow-md:
+    0 1px 2px rgba(15, 20, 30, 0.05), 0 6px 16px -6px rgba(15, 20, 30, 0.12);
+  --shadow-lg:
+    0 1px 2px rgba(15, 20, 30, 0.05), 0 18px 36px -12px rgba(15, 20, 30, 0.18);
+  --ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d0f13;
+    --bg-accent: #12151b;
+    --surface: #171a21;
+    --surface-2: #1d212a;
+    --surface-3: #242935;
+    --border: #262b36;
+    --border-strong: #353c4a;
+    --text: #e9ecf2;
+    --text-muted: #98a1b1;
+    --text-faint: #828b9a;
+
+    --accent: #ff7a45;
+    --accent-hover: #ff8f61;
+    --accent-press: #e96430;
+    --accent-ink: #1b0d05;
+    --accent-soft: #2a1a12;
+    --accent-line: #4a2a1a;
+
+    --ok: #3ddc97;
+    --ok-soft: #11251d;
+    --ok-line: #1d4034;
+    --warn: #f7b955;
+    --warn-soft: #271d0f;
+    --warn-line: #46331a;
+    --danger: #ff7b6b;
+    --danger-soft: #2a1512;
+    --danger-line: #4c2722;
+    --info: #7da3ff;
+    --info-soft: #141b2e;
+    --info-line: #24304d;
+    --idle: #79828f;
+    --idle-soft: #1c2029;
+    --idle-line: #2d333f;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 20px -8px rgba(0, 0, 0, 0.6);
+    --shadow-lg: 0 1px 2px rgba(0, 0, 0, 0.4), 0 20px 40px -14px rgba(0, 0, 0, 0.7);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--font-size);
+  line-height: 1.45;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-wrap: anywhere;
+}
+
+/* The SvelteKit body wrapper carries an inline `display: contents` that the
+   production CSP strips, so restate it from the stylesheet. */
+body > div {
+  display: contents;
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* Scrollbars — the default GTK/WebKit bars look foreign inside the app shell. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: var(--r-full);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-faint);
+  background-clip: content-box;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+/* Screen-reader-only content that stays in the accessibility tree. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Shared primitives. Global on purpose: buttons, stat grids and notices are
+   used by several components and previously each one re-declared them.
+   --------------------------------------------------------------------------- */
+
+/* Buttons ------------------------------------------------------------------ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45em;
+  font: inherit;
+  font-weight: 600;
+  line-height: 1;
+  padding: 0.6em 1.05em;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background var(--dur) var(--ease),
+    border-color var(--dur) var(--ease),
+    color var(--dur) var(--ease),
+    transform var(--dur) var(--ease);
+}
+.btn:hover:not(:disabled) {
+  background: var(--surface-2);
+  border-color: var(--text-faint);
+}
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  box-shadow: var(--shadow-sm);
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+.btn-primary:active:not(:disabled) {
+  background: var(--accent-press);
+  border-color: var(--accent-press);
+}
+/* Inert, not merely faded: a half-opacity orange still reads as "armed". */
+.btn-primary:disabled {
+  background: var(--surface-2);
+  border-color: var(--border);
+  color: var(--text-faint);
+  box-shadow: none;
+  opacity: 1;
+}
+
+.btn-sm {
+  padding: 0.4em 0.7em;
+  font-size: 0.82rem;
+  border-radius: var(--r-sm);
+}
+
+/* Toggle-style segmented option (charge-limit presets). */
+.btn-preset[aria-pressed="true"] {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  color: var(--accent);
+}
+
+/* Form fields -------------------------------------------------------------- */
+.field {
+  font: inherit;
+  padding: 0.55em 0.7em;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  transition: border-color var(--dur) var(--ease);
+}
+.field:hover:not(:disabled) {
+  border-color: var(--text-faint);
+}
+.field:disabled {
+  opacity: 0.55;
+}
+
+/* Stat grids --------------------------------------------------------------- */
+.stat-grid {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  gap: var(--sp-3) var(--sp-5);
+}
+.stat-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.stat-grid dt {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+}
+.stat-grid dd {
+  margin: 0;
+  font-size: 0.98rem;
+  font-weight: 550;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Notices ------------------------------------------------------------------ */
+.notice {
+  margin: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  border-radius: var(--r-md);
+  border: 1px solid var(--tone-line, var(--border));
+  background: var(--tone-soft, var(--surface-2));
+  color: var(--tone-fg, var(--text-muted));
+  font-size: 0.88rem;
+}
+.notice strong {
+  color: inherit;
+}
+.notice[data-tone="warn"] {
+  --tone-fg: var(--warn);
+  --tone-soft: var(--warn-soft);
+  --tone-line: var(--warn-line);
+}
+.notice[data-tone="danger"] {
+  --tone-fg: var(--danger);
+  --tone-soft: var(--danger-soft);
+  --tone-line: var(--danger-line);
+}
+.notice[data-tone="ok"] {
+  --tone-fg: var(--ok);
+  --tone-soft: var(--ok-soft);
+  --tone-line: var(--ok-line);
+}
+.notice[data-tone="info"] {
+  --tone-fg: var(--info);
+  --tone-soft: var(--info-soft);
+  --tone-line: var(--info-line);
+}
+
+/* Small print -------------------------------------------------------------- */
+.hint {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--text-faint);
+}
+.meta {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}

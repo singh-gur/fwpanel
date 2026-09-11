@@ -25,8 +25,16 @@ export default defineConfig(() => ({
         }
       : undefined,
     watch: {
-      // 3. tell Vite to ignore watching Rust build dirs
-      ignored: ["**/src-tauri/**", "**/crates/**", "**/target/**"],
+      // 3. tell Vite to ignore watching Rust build dirs, plus the flatpak
+      //    build trees: their sandbox checkouts contain symlink loops
+      //    (e.g. var/run/udev/watch) that crash the watcher with ELOOP.
+      ignored: [
+        "**/src-tauri/**",
+        "**/crates/**",
+        "**/target/**",
+        "**/.flatpak-builder/**",
+        "**/stage/**",
+      ],
     },
   },
 }));

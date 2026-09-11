@@ -111,8 +111,16 @@ the plan.
 
 ```
 src/                  SvelteKit frontend (Svelte 5 runes, TypeScript)
-  routes/+page.svelte Dashboard: refresh coordinator, service/battery/limit cards
+  app.css             Design tokens (light/dark) + shared primitives
+                      (.btn, .field, .stat-grid, .notice, .hint, .sr-only)
+  routes/+layout.svelte  Loads app.css; renders the page
+  routes/+page.svelte App shell (top bar, card grid, status bar) and the
+                      refresh coordinator
   lib/types.ts        Strict TS mirrors of the protocol DTOs (keep in sync)
+  lib/ui.ts           Presentation vocabularies (IconName, Tone)
+  lib/format.ts       Display formatting for raw milli-unit readings
+  lib/components/     Card/Badge/Icon/Gauge/Skeleton primitives plus the
+                      Battery, ChargeLimit, Ports and InputDeck panels
   app.html            Shell HTML (Tauri injects into this)
 src-tauri/            Rust GUI backend
   src/lib.rs          Tauri commands and app wiring (main.rs only calls it)
@@ -136,6 +144,14 @@ static/               Static assets copied verbatim
   (shared serde DTOs once the protocol crate exists) and are re-declared in TS.
   Keep both sides in sync; do not expose upstream hardware structs directly.
 - **Calling Rust from JS**: `import { invoke } from "@tauri-apps/api/core"`.
+- **No inline `style` attributes.** The production CSP is `style-src 'self'`,
+  which blocks them silently (dev's `devCsp` does not, so this only breaks in a
+  packaged build). Express data-driven geometry — gauges, bars, markers — with
+  SVG presentation attributes instead, and put everything else in a `<style>`
+  block or `app.css`.
+- **Styling**: reach for the tokens and shared primitives in `app.css` before
+  adding component CSS; keep new colours as tokens defined in both palettes.
+  Both palettes are kept at WCAG AA (4.5:1) for text.
 - No new npm/cargo dependencies without justification — the stack is
   intentionally minimal.
 - Keep diffs small. Fix the reported issue; don't refactor adjacent code.

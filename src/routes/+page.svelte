@@ -1,9 +1,13 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
+  import BatteryCard from "$lib/components/BatteryCard.svelte";
   import ChargeLimitControl from "$lib/components/ChargeLimitControl.svelte";
+  import Icon from "$lib/components/Icon.svelte";
   import InputDeckCard from "$lib/components/InputDeckCard.svelte";
   import PortsCard from "$lib/components/PortsCard.svelte";
+  import { humanError, time } from "$lib/format";
   import type { InputDeckSnapshot, PortsSnapshot, PowerSnapshot, ServiceInfo } from "$lib/types";
+  import type { Tone } from "$lib/ui";
 
   // Service connection state. Kinds map to the stable "service-*" prefixes
   // produced by src-tauri/src/service.rs.
@@ -119,8 +123,20 @@
     }
   }
 
-  function manualRefresh() {
-    void refreshCycle();
+  // Only a user-initiated refresh drives the button's busy state. `refreshing`
+  // flips every five seconds for background polls, and letting that reach the
+  // button made it flash and grey out continuously. Duplicate work is still
+  // prevented by the guard at the top of refreshOnce().
+  let manualRefreshing = $state(false);
+
+  async function manualRefresh(): Promise<void> {
+    if (manualRefreshing) return;
+    manualRefreshing = true;
+    try {
+      await refreshCycle();
+    } finally {
+      manualRefreshing = false;
+    }
   }
 
   $effect(() => {
@@ -172,293 +188,278 @@
     }
   }
 
-  const batteryStale = $derived(powerError !== null && power !== null);
+  const statusTone = $derived.by<Tone>(() => {
+    switch (serviceState.kind) {
+      case "ok":
+        return "ok";
+      case "connecting":
+        return "neutral";
+      case "unavailable":
+      case "incompatible":
+        return "warn";
+      default:
+        return "danger";
+    }
+  });
 
-  function timeLabel(date: Date | null): string {
-    return date ? date.toLocaleTimeString() : "";
-  }
+  // Short, actionable second line under the status pill.
+  const statusDetail = $derived.by(() => {
+    switch (serviceState.kind) {
+      case "unavailable":
+        return "Install fwpanel-service, then press Retry";
+      case "incompatible":
+        return "Update fwpanel-service or the app";
+      case "denied":
+        return "Only active local sessions may read status";
+      case "error":
+        return humanError(serviceState.message);
+      default:
+        return "";
+    }
+  });
 
-  const battery = $derived(power?.battery ?? null);
+  const connected = $derived.by(() => serviceState.kind === "ok");
   const chargeLimit = $derived(power?.charge_limit ?? null);
 </script>
 
-<main>
-  <header>
-    <h1>fwpanel</h1>
-    <p class="service-status" data-state={serviceState.kind}>
-      <span class="state">{serviceStatusLabel(serviceState.kind)}</span>
-      {#if serviceState.kind === "ok"}
-        <span class="meta">
-          service {serviceState.info.service_version} · library
-          {serviceState.info.library_version}
-        </span>
-      {:else if serviceState.kind === "unavailable"}
-        <span class="meta">install fwpanel-service, then press Retry</span>
-      {:else if serviceState.kind === "incompatible"}
-        <span class="meta">update fwpanel-service or the app</span>
-      {:else if serviceState.kind === "error"}
-        <span class="meta">{serviceState.message}</span>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <svg class="mark" viewBox="0 0 32 32" width="30" height="30" aria-hidden="true">
+        <rect x="1" y="1" width="30" height="30" rx="9" class="mark-bg" />
+        <path
+          d="M18.2 7.5 11 17.1h4.5L14.3 24.5l7.3-9.8h-4.6z"
+          class="mark-glyph"
+        />
+      </svg>
+      <div class="wordmark">
+        <span class="name">fwpanel</span>
+        <span class="tagline">Framework Control Panel</span>
+      </div>
+    </div>
+
+    <div class="status" data-tone={statusTone}>
+      <span class="status-line">
+        <span class="dot" class:pulse={serviceState.kind === "connecting"}></span>
+        <span class="status-label">{serviceStatusLabel(serviceState.kind)}</span>
+      </span>
+      {#if statusDetail}
+        <span class="status-detail">{statusDetail}</span>
       {/if}
-    </p>
-    <button type="button" onclick={manualRefresh} disabled={refreshing}>
-      {refreshing ? "Refreshing…" : "Retry"}
+    </div>
+
+    <button
+      type="button"
+      class="btn refresh"
+      onclick={() => void manualRefresh()}
+      disabled={manualRefreshing}
+    >
+      <span class="spin" class:spinning={manualRefreshing}>
+        <Icon name="refresh" size={15} />
+      </span>
+      {manualRefreshing ? "Refreshing…" : connected ? "Refresh" : "Retry"}
     </button>
   </header>
 
-  <p class="announcement" role="status" aria-live="polite">{announcement}</p>
+  <p class="sr-only" role="status" aria-live="polite">{announcement}</p>
 
-  {#if power === null && powerError === null}
-    <section class="card" aria-labelledby="battery-heading">
-      <h2 id="battery-heading">Battery</h2>
-      <p>Reading battery status…</p>
-    </section>
-  {:else if battery}
-    <section class="card" aria-labelledby="battery-heading">
-      <h2 id="battery-heading">Battery</h2>
-      {#if batteryStale}
-        <p class="stale-note">
-          <strong>Stale reading</strong> — last successful update
-          {timeLabel(lastSuccessAt)}. {powerError}
-        </p>
-      {/if}
-      <p class="charge">
-        <span class="percent">{battery.percentage}%</span>
-        <span class="state-chips">
-          {#if power?.ac_present}<span class="chip">AC connected</span>{/if}
-          {#if battery.charging}<span class="chip">Charging</span>{/if}
-          {#if battery.discharging}<span class="chip">Discharging</span>{/if}
-          {#if battery.critical}<span class="chip chip-critical">Critical</span>{/if}
-        </span>
-      </p>
-      <dl class="details">
-        <div><dt>Remaining</dt><dd>{battery.remaining_capacity_mah} mAh</dd></div>
-        <div><dt>Last full charge</dt><dd>{battery.last_full_charge_capacity_mah} mAh</dd></div>
-        <div><dt>Design capacity</dt><dd>{battery.design_capacity_mah} mAh</dd></div>
-        <div><dt>Voltage</dt><dd>{battery.voltage_mv / 1000} V</dd></div>
-        <div><dt>Cycle count</dt><dd>{battery.cycle_count}</dd></div>
-      </dl>
-      <p class="hint">Sampled {timeLabel(new Date(power!.timestamp_ms))}</p>
-    </section>
-  {:else if power}
-    <!-- A successful read with battery: null genuinely means no battery. -->
-    <section class="card" aria-labelledby="battery-heading">
-      <h2 id="battery-heading">Battery</h2>
-      <p>No battery detected (running on AC).</p>
-    </section>
-  {:else}
-    <section class="card error" aria-labelledby="battery-heading">
-      <h2 id="battery-heading">Battery</h2>
-      <p>
-        <strong>Battery status unavailable.</strong>
-        {powerError ?? ""}
-      </p>
-      <p class="hint">
-        {#if lastSuccessAt}Last successful read: {timeLabel(lastSuccessAt)}.{/if}
-      </p>
-    </section>
-  {/if}
+  <main class="content">
+    <div class="grid">
+      <BatteryCard {power} {powerError} {lastSuccessAt} />
+      <ChargeLimitControl {chargeLimit} onApplied={() => void refreshCycle()} />
+      <InputDeckCard card={deckCard} />
+      <PortsCard card={portsCard} />
+    </div>
+  </main>
 
-  <ChargeLimitControl {chargeLimit} onApplied={() => void refreshCycle()} />
-
-  <PortsCard card={portsCard} />
-
-  <InputDeckCard card={deckCard} />
-
-  <footer>
+  <footer class="statusbar">
     <span class="meta">
-      {#if lastSuccessAt}Last successful read: {timeLabel(lastSuccessAt)}{/if}
+      {#if lastSuccessAt}Last successful read {time(lastSuccessAt)}{:else}No reading yet{/if}
     </span>
+    {#if serviceState.kind === "ok"}
+      <span class="meta dim">
+        service {serviceState.info.service_version} · framework_lib
+        {serviceState.info.library_version}
+      </span>
+    {/if}
   </footer>
-</main>
+</div>
 
 <style>
-  :global(:root) {
-    font-family: system-ui, sans-serif;
-    font-size: 15px;
-    color-scheme: light dark;
-  }
-  :global(body) {
-    margin: 0;
-    background: #f6f6f8;
-    color: #1a1a1f;
-  }
-  @media (prefers-color-scheme: dark) {
-    :global(body) {
-      background: #232329;
-      color: #eeeef2;
-    }
-  }
-
-  main {
-    max-width: 720px;
-    margin: 0 auto;
-    padding: 1rem 1.25rem 2rem;
+  .app {
+    min-height: 100vh;
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    background:
+      radial-gradient(90rem 40rem at 50% -12rem, var(--bg-accent), transparent 70%),
+      var(--bg);
   }
 
-  header {
+  /* Top bar ---------------------------------------------------------------- */
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: var(--sp-4);
     flex-wrap: wrap;
+    padding: var(--sp-3) var(--sp-6);
+    border-bottom: 1px solid var(--border);
+    /* Fallback first: older WebKitGTK drops the color-mix() declaration. */
+    background: var(--surface);
+    background: color-mix(in srgb, var(--surface) 88%, transparent);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
   }
-  h1 {
-    font-size: 1.4rem;
-    margin: 0;
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    min-width: 0;
   }
-  .service-status {
-    flex: 1;
-    margin: 0;
+  .mark {
+    display: block;
+    flex: none;
+  }
+  .mark-bg {
+    fill: var(--accent);
+  }
+  .mark-glyph {
+    fill: var(--accent-ink);
+  }
+  .wordmark {
     display: flex;
     flex-direction: column;
-    gap: 0.15rem;
-    min-width: 12rem;
+    line-height: 1.15;
+    min-width: 0;
   }
-  .service-status .state {
+  .name {
+    font-size: 1.02rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  .tagline {
+    font-size: 0.72rem;
+    color: var(--text-faint);
+    letter-spacing: 0.02em;
+  }
+
+  /* Service status --------------------------------------------------------- */
+  .status {
+    margin-left: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 1px;
+    min-width: 0;
+    text-align: right;
+  }
+  .status[data-tone="ok"] {
+    --tone: var(--ok);
+  }
+  .status[data-tone="warn"] {
+    --tone: var(--warn);
+  }
+  .status[data-tone="danger"] {
+    --tone: var(--danger);
+  }
+  .status[data-tone="neutral"] {
+    --tone: var(--idle);
+  }
+  .status-line {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45em;
+  }
+  .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--tone);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--tone) 18%, transparent);
+    flex: none;
+    /* No fallback ring is needed — the dot itself carries the colour. */
+  }
+  .pulse {
+    animation: pulse 1.4s var(--ease) infinite;
+  }
+  @keyframes pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.3;
+    }
+  }
+  .status-label {
+    font-size: 0.86rem;
     font-weight: 600;
+    color: var(--tone);
   }
-  .service-status[data-state="ok"] .state::before {
-    content: "● ";
-  }
-  .service-status[data-state="unavailable"] .state,
-  .service-status[data-state="denied"] .state,
-  .service-status[data-state="incompatible"] .state,
-  .service-status[data-state="error"] .state {
-    color: #b3261e;
-  }
-  @media (prefers-color-scheme: dark) {
-    .service-status[data-state="unavailable"] .state,
-    .service-status[data-state="denied"] .state,
-    .service-status[data-state="incompatible"] .state,
-    .service-status[data-state="error"] .state {
-      color: #ff8a80;
-    }
+  .status-detail {
+    font-size: 0.74rem;
+    color: var(--text-faint);
   }
 
-  button {
-    font: inherit;
-    padding: 0.45em 1.2em;
-    border-radius: 8px;
-    border: 1px solid #7a7a85;
-    background: #fff;
-    color: inherit;
-    cursor: pointer;
+  .refresh {
+    flex: none;
   }
-  button:disabled {
-    opacity: 0.6;
-    cursor: default;
-  }
-  @media (prefers-color-scheme: dark) {
-    button {
-      background: #2e2e36;
-      border-color: #8a8a95;
-    }
-  }
-  button:focus-visible {
-    outline: 2px solid #396cd8;
-    outline-offset: 2px;
-  }
-
-  .announcement {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    margin: -1px;
-  }
-
-  .card {
-    background: #fff;
-    border: 1px solid #d9d9e0;
-    border-radius: 12px;
-    padding: 1rem 1.25rem;
+  .spin {
     display: flex;
-    flex-direction: column;
-    gap: 0.6rem;
   }
-  .card.error {
-    border-color: #b3261e;
+  .spinning {
+    animation: spin 900ms linear infinite;
   }
-  @media (prefers-color-scheme: dark) {
-    .card {
-      background: #2b2b33;
-      border-color: #3f3f49;
-    }
-    .card.error {
-      border-color: #ff8a80;
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
     }
   }
-  .card h2 {
-    font-size: 1rem;
-    margin: 0;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: #5f5f6b;
-  }
 
-  .charge {
-    margin: 0;
-    display: flex;
-    align-items: baseline;
-    gap: 0.8rem;
-    flex-wrap: wrap;
+  /* Content ---------------------------------------------------------------- */
+  .content {
+    flex: 1;
+    width: 100%;
+    max-width: 64rem;
+    margin: 0 auto;
+    padding: var(--sp-6);
   }
-  .percent {
-    font-size: 2.6rem;
-    font-weight: 700;
-    line-height: 1;
-  }
-  .state-chips {
-    display: flex;
-    gap: 0.4rem;
-    flex-wrap: wrap;
-  }
-  .chip {
-    border: 1px solid currentColor;
-    border-radius: 999px;
-    padding: 0.1em 0.7em;
-    font-size: 0.85rem;
-  }
-  .chip-critical {
-    font-weight: 700;
-    border-width: 2px;
-  }
-
-  .stale-note {
-    margin: 0;
-    font-style: italic;
-  }
-
-  dl.details {
-    margin: 0;
+  .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
-    gap: 0.5rem 1.25rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--sp-4);
+    align-items: start;
   }
-  dl.details div {
-    display: flex;
-    flex-direction: column;
-  }
-  dl.details dt {
-    font-size: 0.8rem;
-    color: #5f5f6b;
-  }
-  dl.details dd {
-    margin: 0;
-    font-variant-numeric: tabular-nums;
+  @media (max-width: 46rem) {
+    .grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .content,
+    .topbar {
+      padding-left: var(--sp-4);
+      padding-right: var(--sp-4);
+    }
   }
 
-  .hint,
-  .meta {
-    font-size: 0.85rem;
-    color: #5f5f6b;
-    margin: 0;
-  }
-  footer {
+  /* Status bar ------------------------------------------------------------- */
+  .statusbar {
     display: flex;
-    justify-content: flex-end;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-4);
+    flex-wrap: wrap;
+    padding: var(--sp-2) var(--sp-6);
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    font-size: 0.76rem;
+  }
+  .statusbar .meta {
+    font-size: 0.76rem;
+  }
+  .dim {
+    color: var(--text-faint);
   }
 </style>

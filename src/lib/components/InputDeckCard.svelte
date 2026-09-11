@@ -1,5 +1,11 @@
 <script lang="ts">
+  import Badge from "$lib/components/Badge.svelte";
+  import Card from "$lib/components/Card.svelte";
+  import Icon from "$lib/components/Icon.svelte";
+  import Skeleton from "$lib/components/Skeleton.svelte";
+  import { humanError, time } from "$lib/format";
   import type { DeckState, InputDeckSnapshot, PortsSnapshot } from "$lib/types";
+  import type { Tone } from "$lib/ui";
 
   let {
     card,
@@ -25,85 +31,87 @@
     no_detection: "On (no detection)",
   };
 
+  const stateTone: Record<DeckState, Tone> = {
+    off: "neutral",
+    disconnected: "warn",
+    turning_on: "info",
+    on: "ok",
+    force_off: "warn",
+    force_on: "warn",
+    no_detection: "ok",
+  };
+
   const unsupported = $derived(
     card.error !== null && card.error.includes("unsupported_feature"),
   );
 </script>
 
-<section class="card" aria-labelledby="deck-heading">
-  <h2 id="deck-heading">Input deck</h2>
+<Card
+  title="Input deck"
+  id="deck-heading"
+  icon="keyboard"
+  tone={card.error && !snapshot && !unsupported ? "alert" : "default"}
+>
   {#if snapshot}
-    <dl class="details">
-      <div><dt>Deck state</dt><dd>{stateLabel[snapshot.deck_state]}</dd></div>
-      <div><dt>Touchpad</dt><dd>{snapshot.touchpad_present ? "Present" : "Not detected"}</dd></div>
-    </dl>
-    <p class="hint">Laptop 13 input deck power state; module inventory is not exposed.</p>
+    <div class="rows">
+      <div class="row">
+        <span class="row-label">Deck state</span>
+        <Badge tone={stateTone[snapshot.deck_state]} icon="chip">
+          {stateLabel[snapshot.deck_state]}
+        </Badge>
+      </div>
+      <div class="row">
+        <span class="row-label">Touchpad</span>
+        <Badge tone={snapshot.touchpad_present ? "ok" : "neutral"}>
+          {snapshot.touchpad_present ? "Present" : "Not detected"}
+        </Badge>
+      </div>
+    </div>
+    <p class="hint">
+      Laptop 13 input deck power state; module inventory is not exposed.
+    </p>
   {:else if unsupported}
-    <p>This EC does not report input-deck status.</p>
+    <p class="notice">
+      <Icon name="chip" size={15} />
+      <span>This EC does not report input-deck status.</span>
+    </p>
   {:else if card.error}
-    <p>
-      <strong>Input-deck status unavailable.</strong>
-      <span class="error-text">{card.error}</span>
+    <p class="notice" data-tone="danger">
+      <Icon name="alert" size={15} />
+      <span><strong>Input-deck status unavailable.</strong> {humanError(card.error)}</span>
     </p>
     {#if card.lastSuccessAt}
-      <p class="hint">Last successful read: {card.lastSuccessAt.toLocaleTimeString()}.</p>
+      <p class="hint">Last successful read: {time(card.lastSuccessAt)}.</p>
     {/if}
   {:else}
-    <p>Waiting for first reading…</p>
+    <Skeleton lines={2} />
   {/if}
-</section>
+</Card>
 
 <style>
-  .card {
-    background: #fff;
-    border: 1px solid #d9d9e0;
-    border-radius: 12px;
-    padding: 1rem 1.25rem;
+  .rows {
     display: flex;
     flex-direction: column;
-    gap: 0.6rem;
+    gap: var(--sp-2);
   }
-  h2 {
-    font-size: 1rem;
-    margin: 0;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: #5f5f6b;
-  }
-  dl.details {
-    margin: 0;
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
-    gap: 0.5rem 1.25rem;
-  }
-  dl.details div {
+  .row {
     display: flex;
-    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-3);
+    flex-wrap: wrap;
+    padding: var(--sp-2) 0;
+    border-bottom: 1px solid var(--border);
   }
-  dl.details dt {
-    font-size: 0.8rem;
-    color: #5f5f6b;
+  .row:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
   }
-  dl.details dd {
-    margin: 0;
-    font-variant-numeric: tabular-nums;
-  }
-  .error-text {
-    color: #b3261e;
+  .row-label {
+    font-size: 0.72rem;
     font-weight: 600;
-  }
-  .hint {
-    font-size: 0.85rem;
-    color: #5f5f6b;
-    margin: 0;
-  }
-  @media (prefers-color-scheme: dark) {
-    .card {
-      background: #2b2b33;
-      border-color: #3f3f49;
-    }
-    .error-text {
-      color: #ff8a80;
-    }
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-faint);
   }
 </style>
