@@ -225,12 +225,12 @@
 <div class="app">
   <header class="topbar">
     <div class="brand">
-      <svg class="mark" viewBox="0 0 32 32" width="30" height="30" aria-hidden="true">
-        <rect x="1" y="1" width="30" height="30" rx="9" class="mark-bg" />
-        <path
-          d="M18.2 7.5 11 17.1h4.5L14.3 24.5l7.3-9.8h-4.6z"
-          class="mark-glyph"
-        />
+      <!-- Same mark as the app icon (src-tauri/icons/icon.svg). Brand colours
+           are fixed rather than themed, so the header matches the desktop
+           icon in both palettes. -->
+      <svg class="mark" viewBox="0 0 512 512" width="30" height="30" aria-hidden="true">
+        <rect width="512" height="512" rx="114" fill="#181b22" />
+        <path d="M310 96 L150 306 h84 l-32 110 l160 -210 h-84 z" fill="#ef5f1d" />
       </svg>
       <div class="wordmark">
         <span class="name">fwpanel</span>
@@ -322,12 +322,6 @@
   .mark {
     display: block;
     flex: none;
-  }
-  .mark-bg {
-    fill: var(--accent);
-  }
-  .mark-glyph {
-    fill: var(--accent-ink);
   }
   .wordmark {
     display: flex;

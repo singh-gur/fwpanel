@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- fwpanel app icon. Two elements, two colours.
+       Rasters are generated from this file:
+         magick -background none icon.svg -resize 1024x1024 icon-1024.png
+         pnpm tauri icon icon-1024.png
+       -background none is required; without it the corners render opaque. -->
+  <rect width="512" height="512" rx="114" fill="#181b22"/>
+  <!-- Keeps the tile edge visible against a dark desktop. -->
+  <rect x="1.5" y="1.5" width="509" height="509" rx="112.5" fill="none"
+        stroke="#ffffff" stroke-opacity="0.08" stroke-width="3"/>
+  <path d="M310 96 L150 306 h84 l-32 110 l160 -210 h-84 z" fill="#ef5f1d"/>
+</svg>
