@@ -80,6 +80,42 @@ Rust commands (`cargo check`/`fmt`/`clippy`/`test`) run from the repo root and
 cover the whole workspace: `src-tauri` plus `crates/fwpanel-protocol` and
 `crates/fwpanel-service`.
 
+## Guided installation (Fedora- and Ubuntu-based distros)
+
+`packaging/install.sh` builds and installs both halves — the privileged host
+service and the unprivileged Flatpak GUI — on RPM- and Debian-based systems.
+Run it as an ordinary user; it calls `sudo` only for the service and prompts
+before every privileged step.
+
+```bash
+just install-all                    # service + Flatpak
+just install-all --service-only     # or either half alone
+just install-all --flatpak-only
+just install-all -y                 # accept all prompts
+just uninstall-all                  # remove both again
+```
+
+The service install differs by family, because only Fedora has packaging here:
+
+| Family | Service install | Removal |
+|---|---|---|
+| Fedora/RHEL | builds the RPM, then `dnf install` | `dnf remove fwpanel-service` |
+| Debian/Ubuntu | installs the five files directly | deletes the five files |
+
+The Flatpak half is identical everywhere: a `--user` Flathub remote plus a
+local `flatpak-builder` build. Host build requirements are small — the service
+links only pure-Rust crates, and the GUI's webkit2gtk stack comes from the
+Flatpak runtime, so the script needs just a C toolchain (`gcc` /
+`build-essential`), `flatpak`, `flatpak-builder`, and `rpm-build` on Fedora.
+It offers to install those after showing the exact list.
+
+Rust and Node are **not** installed for you: `cargo` must already be on PATH
+(the Flatpak build needs no host toolchain at all). The Flatpak also builds
+from **git HEAD** of the checkout, so commit your work first — the script warns
+if the tree is dirty.
+
+The sections below document the manual equivalents.
+
 ## Host service staging and installation
 
 > Preferred installation: the RPMs from Phase 6 (`just build-rpm` produces

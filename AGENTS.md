@@ -92,6 +92,8 @@ Rules for implementation:
 | Rust tests | `cargo test --workspace` |
 | Stage host service | `just stage-service <destdir>` (no root writes) |
 | Check installed service | `just check-service` (read-only) |
+| Install service + Flatpak | `just install-all` (Fedora/Ubuntu; prompts per step) |
+| Uninstall both | `just uninstall-all` |
 | Build service RPM | `just build-service-rpm` → `stage/rpm/RPMS/x86_64/` |
 | Build both RPMs | `just build-rpm` → service + `target/release/bundle/rpm/` |
 | Build/install user Flatpak | `just build-flatpak` |
@@ -102,6 +104,14 @@ to embed/load the frontend; `--release` alone still uses the development URL.
 The privileged host service remains a separately installed RPM. Phase 7 is
 owner-accepted; live Flatpak/service checks and known polling/error-label issues
 remain outstanding as recorded in `plans/initial-development.md`.
+
+`packaging/install.sh` is the only script here that mutates the system. It
+supports RPM- and Debian-based families: the service is installed as an RPM on
+Fedora/RHEL and as the five plain files on Debian/Ubuntu (no `.deb` packaging
+exists), while the Flatpak half is a `--user` build everywhere. It must refuse
+to run as root, must prompt before each privileged step unless `-y` is passed,
+and must never install Rust or Node toolchains. Keep its `SERVICE_FILES` list
+in sync with `packaging/stage-service.sh` and `packaging/rpm/fwpanel-service.spec`.
 
 There is no frontend test runner yet. Non-trivial conversion, validation, and
 error logic gets unit tests; service authorization and hardware checks follow
@@ -131,7 +141,8 @@ crates/
   fwpanel-protocol/   Shared wire DTOs, reply envelope, validation, tests
   fwpanel-service/    Privileged host service: D-Bus + polkit + hardware gate
                       (battery/charge-limit, ports/deck reads, authorized writes)
-packaging/            systemd/D-Bus/polkit assets, stage-service.sh, check-service.sh
+packaging/            systemd/D-Bus/polkit assets, stage-service.sh,
+                      check-service.sh, install.sh (service + Flatpak installer)
 static/               Static assets copied verbatim
 ```
 

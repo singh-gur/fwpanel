@@ -71,6 +71,14 @@ build-rpm: build-service-rpm
 check-service:
     packaging/check-service.sh
 
+# Install host service + Flatpak GUI (Fedora/Ubuntu; args: --service-only, --flatpak-only, -y).
+install-all *args:
+    packaging/install.sh {{args}}
+
+# Remove what install-all installed (build deps and toolchains are kept).
+uninstall-all *args:
+    packaging/install.sh --uninstall {{args}}
+
 # Generate the pinned Flatpak offline source manifests.
 flatpak-sources:
     packaging/flatpak/generate-sources.sh
