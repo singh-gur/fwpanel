@@ -208,7 +208,9 @@
       </p>
     {/if}
     <p class="hint">
-      Applied only after explicit Apply, verified by reading the setting back.
+      Nothing changes until you press Apply. The limit lasts until you restart,
+      because your laptop resets it to the default each time it starts up. To set
+      a limit that sticks, change it in your laptop's BIOS settings.
     </p>
   {:else if chargeLimit?.status === "failed"}
     <p class="notice" data-tone="danger">
