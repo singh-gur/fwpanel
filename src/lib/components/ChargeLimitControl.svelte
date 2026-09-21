@@ -47,8 +47,11 @@
   const canApply = $derived(!applying && valid && !belowMinimum && dirty);
 
   // Bar geometry: SVG attributes only, because the production CSP forbids
-  // inline style attributes.
-  const fill = $derived(Math.max(0, Math.min(100, draft ?? 0)));
+  // inline style attributes. The bar shares the slider's domain so the fill
+  // edge tracks the thumb instead of drifting from it.
+  const scale = (value: number) =>
+    ((Math.max(HARD_MIN, Math.min(HARD_MAX, value)) - HARD_MIN) / (HARD_MAX - HARD_MIN)) * 100;
+  const fill = $derived(scale(draft ?? currentMax ?? HARD_MIN));
 
   function preset(value: number) {
     if (applying) return;
@@ -96,12 +99,6 @@
       </span>
     </div>
 
-    <svg class="bar" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true">
-      <rect class="bar-track" x="0" y="0" width="100" height="6" rx="3" />
-      <rect class="bar-fill" x="0" y="0" width={fill} height="6" rx="3" />
-      <rect class="bar-tick" x={Math.min(99.4, chargeLimit.limits.maximum_percent)} y="-1" width="0.6" height="8" />
-    </svg>
-
     <form
       class="controls"
       onsubmit={(e) => {
@@ -111,6 +108,20 @@
     >
       <label class="slider-row" for="charge-limit-slider">
         <span class="sr-only">New maximum charge percentage</span>
+        <svg class="bar" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true">
+          <rect class="bar-track" x="0" y="0" width="100" height="6" rx="3" />
+          <rect class="bar-fill" x="0" y="0" width={fill} height="6" rx="3" />
+          {#if dirty}
+            <!-- Where the applied limit sits, shown only while it differs. -->
+            <rect
+              class="bar-tick"
+              x={Math.min(99.4, scale(chargeLimit.limits.maximum_percent))}
+              y="-1"
+              width="0.6"
+              height="8"
+            />
+          {/if}
+        </svg>
         <!-- Deliberately one-way: a range input with an empty value snaps to
              the midpoint of its range, and `bind:` would write that back into
              `draft`, making the card look edited before the user touched it. -->
@@ -244,7 +255,11 @@
     color: var(--text-faint);
   }
 
+  /* Sits under the slider so the readout and the control are one track. */
   .bar {
+    position: absolute;
+    top: 8px;
+    left: 0;
     width: 100%;
     height: 6px;
     display: block;
@@ -255,7 +270,8 @@
   }
   .bar-fill {
     fill: var(--accent);
-    transition: width 300ms var(--ease);
+    /* No transition: the fill tracks the slider thumb, so easing it makes the
+       bar visibly trail the drag. */
   }
   .bar-tick {
     fill: var(--text-faint);
@@ -287,11 +303,14 @@
   }
 
   .slider-row {
+    position: relative;
     display: block;
+    height: 22px;
   }
   .slider {
     -webkit-appearance: none;
     appearance: none;
+    position: relative;
     width: 100%;
     height: 22px;
     background: transparent;
@@ -302,10 +321,10 @@
     opacity: 0.5;
     cursor: not-allowed;
   }
+  /* The visible track is the bar beneath; the input contributes only a thumb. */
   .slider::-webkit-slider-runnable-track {
     height: 4px;
-    border-radius: var(--r-full);
-    background: var(--surface-3);
+    background: transparent;
   }
   .slider::-webkit-slider-thumb {
     -webkit-appearance: none;
@@ -324,8 +343,7 @@
   }
   .slider::-moz-range-track {
     height: 4px;
-    border-radius: var(--r-full);
-    background: var(--surface-3);
+    background: transparent;
   }
   .slider::-moz-range-thumb {
     width: 14px;
